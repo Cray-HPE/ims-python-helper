@@ -1,0 +1,11 @@
+-c constraints.txt
+
+# Testing requirements for testing ims-python-helper
+fixtures
+mock
+pytest
+pytest-cov
+pycodestyle
+pylint
+responses
+testtools
