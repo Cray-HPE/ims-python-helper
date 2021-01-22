@@ -3,5 +3,7 @@ rpmBuild(
     product: "csm",
     target_node: "ncn",
     channel: "casmcms-builds",
-    fanout_params: ["sle15sp1"]
+    fanout_params: ["sle15sp1"],
+    githubPushRepo: "Cray-HPE/ims-python-helper",
+    githubPushBranches: /(bugfix\/.*|feature\/.*|hotfix\/.*|master|release\/.*)/
 )
