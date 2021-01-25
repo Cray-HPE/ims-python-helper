@@ -1,4 +1,6 @@
 @Library('dst-shared') _
+// NOTE: If this Jenkinsfile is removed, the a Jenkinsfile.github file must be created
+// to do the github push. See the cray-product-install-charts repo for an example.
 rpmBuild(
     product: "csm",
     target_node: "ncn",
