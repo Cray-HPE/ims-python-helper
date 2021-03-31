@@ -1,6 +1,6 @@
 # Copyright 2019,2021 Hewlett Packard Enterprise Development LP
 Name: cray-ims-python-helper-crayctldeploy
-License: Cray Software License Agreement
+License: MIT
 Summary: Rich Client Support for Cray Image Management Service
 Group: System/Management
 Version: %(cat .rpm_version)
@@ -29,7 +29,7 @@ Python 2 and 3 versions are installed.
 %build
 python setup.py build
 python3 setup.py build
-curl https://bootstrap.pypa.io/2.7/get-pip.py --output get-pip.py
+curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
 python get-pip.py
 python3 get-pip.py
 
