@@ -1,5 +1,5 @@
 // Jenkinsfile for ims-python-helper Python package
-// Copyright 2018, 2020 Hewlett Packard Enterprise Development LP
+// Copyright 2018, 2020-2021 Hewlett Packard Enterprise Development LP
  
 @Library('dst-shared@master') _
 
@@ -9,7 +9,7 @@ pipeline {
             label "cray-ims-python-helper-test-pod"
             containerTemplate {
                 name "cray-ims-python-helper-test-cont"
-                image "dtr.dev.cray.com/cache/alpine-python:2.7_latest"
+                image "arti.dev.cray.com/internal-docker-master-local/cray-alpine3_build_environment:latest"
                 ttyEnabled true
                 command "cat"
             }
@@ -38,9 +38,11 @@ pipeline {
             steps {
                 container('cray-ims-python-helper-test-cont') {
                     sh """
-                        apk add --no-cache --virtual bash curl
-                        pip install wheel
-                        python setup.py sdist bdist_wheel
+                        apk add --no-cache --virtual .build-deps py3-pip curl bash
+                        apk add --no-cache --update python3
+                        pip3 install --upgrade pip setuptools
+                        pip3 install wheel
+                        python3 setup.py sdist bdist_wheel
                     """             
                 }
             }
@@ -50,9 +52,9 @@ pipeline {
             steps {
                 container('cray-ims-python-helper-test-cont') {
                     sh """
-                       pip install -r requirements.txt
-                       pip install -r requirements-test.txt
-                       python tests/test_images.py
+                       pip3 install -r requirements.txt
+                       pip3 install -r requirements-test.txt
+                       python3 tests/test_images.py
                        pycodestyle --config=.pycodestyle ./ims_python_helper || true
                        pylint ./ims_python_helper || true
                     """
