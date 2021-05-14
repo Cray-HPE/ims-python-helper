@@ -1,5 +1,4 @@
 // Jenkinsfile for ims-python-helper Python package
-// Copyright 2018, 2020-2021 Hewlett Packard Enterprise Development LP
  
 @Library('dst-shared@release/shasta-1.4') _
 
