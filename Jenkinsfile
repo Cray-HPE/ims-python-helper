@@ -32,14 +32,42 @@ pipeline {
     }
 
     stages {
-        stage('Build Package') {
+
+        stage('Install necessary tools') {
             steps {
                 container('cray-ims-python-helper-test-cont') {
+                    // Install rpm separately since we are going to remove it
                     sh """
+                        apk add --no-cache --virtual .build-tools rpm
                         apk add --no-cache --virtual .build-deps py3-pip curl bash
                         apk add --no-cache --update python3
                         pip3 install --upgrade pip setuptools
                         pip3 install wheel
+                    """
+                }
+            }
+        }
+
+        stage('Linting') {
+            steps {
+                container('cray-ims-python-helper-test-cont') {
+                                    sh "./runLint.sh"
+                }
+            }
+        }
+
+        stage('Remove tools needed only for prep and linting') {
+            steps {
+                container('cray-ims-python-helper-test-cont') {
+                    sh "apk del .build-tools"
+                }
+            }
+        }
+
+        stage('Build Package') {
+            steps {
+                container('cray-ims-python-helper-test-cont') {
+                    sh """
                         python3 setup.py sdist bdist_wheel
                     """             
                 }
