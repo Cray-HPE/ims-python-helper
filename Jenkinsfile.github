@@ -1,0 +1,61 @@
+@Library('csm-shared-library') _
+
+pipeline {
+    agent {
+        docker {
+            label "metal-gcp-builder"
+            image "arti.dev.cray.com/dstbuildenv-docker-master-local/cray-sle15sp2_build_environment:latest"
+            args "-u root"
+        }
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: "10"))
+        timestamps()
+    }
+
+    environment {
+        NAME = "ims-python-helper"
+        IS_STABLE = getBuildIsStable()
+    }
+
+    stages {
+        stage("Install necessary tools") {
+            steps {
+                sh "make prepare"
+            }
+        }
+
+        stage("Linting") {
+            steps {
+                sh "./runLint.sh"
+            }
+        }
+
+        stage("Build Python Module") {
+            steps {
+                sh "make python_wheel"
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                sh "make unit_test"
+            }
+        }
+
+        stage("Publish") {
+            steps {
+                script {
+                    publishCsmPythonModules(module: env.NAME, isStable: env.IS_STABLE)
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh "sudo chown -R jenkins:jenkins ${env.WORKSPACE}"
+        }
+    }
+}
