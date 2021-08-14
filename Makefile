@@ -22,6 +22,14 @@
 
 BUILD_DIR := $(PWD)/dist/rpmbuild
 
+all: runbuildprep lint prepare python_wheel unit_test
+
+runbuildprep:
+		./cms_meta_tools/scripts/runBuildPrep.sh
+
+lint:
+		./cms_meta_tools/scripts/runLint.sh
+
 prepare:
 		pip3 install --upgrade pip setuptools
 		pip3 install wheel
