@@ -6,7 +6,6 @@ pipeline {
         docker {
             label "metal-gcp-builder"
             image "arti.dev.cray.com/dstbuildenv-docker-master-local/cray-sle15sp2_build_environment:latest"
-            args "-u root"
         }
     }
 
@@ -71,12 +70,6 @@ pipeline {
                     publishCsmPythonModules(module: env.NAME, isStable: env.IS_STABLE)
                 }
             }
-        }
-    }
-
-    post {
-        always {
-            sh "sudo chown -R jenkins:jenkins ${env.WORKSPACE}"
         }
     }
 }
