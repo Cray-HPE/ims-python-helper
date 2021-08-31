@@ -25,6 +25,9 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+with open("gitInfo.txt", "r") as fh:
+    long_description += '\n' + fh.read()
+
 with open('.version', 'r') as fh:
     version = fh.read().strip()
 
@@ -45,7 +48,8 @@ setuptools.setup(
     url="https://github.com/Cray-HPE/ims-python-helper",
     packages=setuptools.find_packages(),
     keywords="Cray IMS",
-    classifiers=(
-      "Programming Language :: Python :: 3.6",
-    ),
+    classifiers=[
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3.6",
+    ],
 )
