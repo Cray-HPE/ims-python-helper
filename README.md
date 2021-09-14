@@ -7,7 +7,7 @@
 Install the package via pip with the Cray internal pip index url:
 
 ```bash
-pip install ims-python-helper --trusted-host dst.us.cray.com --index-url http://dst.us.cray.com/piprepo/simple
+pip install ims-python-helper --trusted-host artifactory.algol60.net --index-url http://artifactory.algol60.net/artifactory/csm-python-modules/simple
 ```
 
 ### Assumptions
