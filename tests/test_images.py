@@ -155,7 +155,6 @@ class TestImage(TestCase):
         exp_req_data = {
             'recipe_type': 'kiwi-ng',
             'linux_distribution': linux_distribution,
-            'template_dictionary': None,
             'name': recipe_name,
         }
         self.assertEqual(
