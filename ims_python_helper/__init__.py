@@ -359,7 +359,7 @@ class ImsHelper(object):
             ),
         }
 
-    def recipe_upload(self, name, filepath, distro, template_dictionary):
+    def recipe_upload(self, name, filepath, distro, template_dictionary=None):
         """
         Utility function that uploads a recipe to S3 and registers it with IMS.
         Only gzipped tar recipe archives are supported.
@@ -400,10 +400,16 @@ class ImsHelper(object):
                     LOGGER.error("Unable to delete recipe: %s", delete_err)
                     raise err
 
-        LOGGER.info(
-            "Starting recipe_upload; name=%s, file=%s, distro=%s, template_dictionary=%s",
-            name, filepath, distro, template_dictionary
-        )
+        if template_dictionary:
+            LOGGER.info(
+                "Starting recipe_upload; name=%s, file=%s, distro=%s, template_dictionary=%s",
+                name, filepath, distro, template_dictionary
+            )
+        else:
+            LOGGER.info(
+                "Starting recipe_upload; name=%s, file=%s, distro=%s",
+                name, filepath, distro
+            )
 
         # Get all recipes and filter for the current recipe
         recipes = self._ims_recipes_get()
@@ -483,18 +489,25 @@ class ImsHelper(object):
 
         if template_dictionary:
             template_dictionary = [{'key': k, 'value': v} for k, v in template_dictionary.items()]
-
-        LOGGER.info(
-            "POST %s name=%s, linux_distribution=%s, template_dictionary=%s",
-            name, url, linux_distribution, template_dictionary
-        )
+            LOGGER.info(
+                "POST %s name=%s, linux_distribution=%s, template_dictionary=%s",
+                name, url, linux_distribution, template_dictionary
+            )
+        else:
+            LOGGER.info(
+                "POST %s name=%s, linux_distribution=%s",
+                name, url, linux_distribution
+            )
 
         body = {
             'recipe_type': 'kiwi-ng',
             'linux_distribution': linux_distribution,
-            'template_dictionary': template_dictionary,
             'name': name,
         }
+
+        if template_dictionary:
+            body['template_dictionary'] = template_dictionary
+
         resp = self.session.post(url, json=body)
         resp.raise_for_status()
         return resp.json()
