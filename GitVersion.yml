@@ -27,6 +27,7 @@ branches:
   main:
     regex: ^master$|^main$
     mode: ContinuousDelivery
+    tag: rc
   develop:
     regex: ^develop$
     increment: Minor           ## The NEXT release will be 1.2.0 if the latest production release is 1.1.x
