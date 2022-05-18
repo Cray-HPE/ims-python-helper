@@ -31,7 +31,7 @@ with open("gitInfo.txt", "r") as fh:
     long_description += '\n' + fh.read()
 
 with open('.version', 'r') as fh:
-    version = fh.read().strip().replace('-', '+', 1)
+    version = fh.read().strip()
 
 setuptools.setup(
     name="ims-python-helper",
