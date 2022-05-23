@@ -20,7 +20,7 @@
 # OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
-#
+
 """
 Cray Image Management Service ImsHelper Class
 """
@@ -359,7 +359,7 @@ class ImsHelper(object):
             ),
         }
 
-    def recipe_upload(self, name, filepath, distro):
+    def recipe_upload(self, name, filepath, distro, template_dictionary):
         """
         Utility function that uploads a recipe to S3 and registers it with IMS.
         Only gzipped tar recipe archives are supported.
@@ -401,8 +401,8 @@ class ImsHelper(object):
                     raise err
 
         LOGGER.info(
-            "Starting recipe_upload; name=%s, file=%s, distro=%s",
-            name, filepath, distro
+            "Starting recipe_upload; name=%s, file=%s, distro=%s, template_dictionary=%s",
+            name, filepath, distro, template_dictionary
         )
 
         # Get all recipes and filter for the current recipe
@@ -418,7 +418,7 @@ class ImsHelper(object):
             )
 
             # Create the recipe record
-            recipe_data = self._ims_recipe_create(name, distro)
+            recipe_data = self._ims_recipe_create(name, distro, template_dictionary)
             LOGGER.info("New recipe created: %s", recipe_data)
 
             # Go on, upload it
@@ -467,7 +467,7 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
-    def _ims_recipe_create(self, name, linux_distribution):
+    def _ims_recipe_create(self, name, linux_distribution=None, template_dictionary=None):
         """
         Create an IMS Recipe record of a kiwi-ng recipe.
 
@@ -480,13 +480,19 @@ class ImsHelper(object):
             requests.exceptions.HTTPError
         """
         url = '/'.join([self.ims_url, 'recipes'])
+
+        if template_dictionary:
+            template_dictionary = [{'key': k, 'value': v} for k, v in template_dictionary.items()]
+
         LOGGER.info(
-            "POST %s name=%s, linux_distribution=%s",
-            name, url, linux_distribution
+            "POST %s name=%s, linux_distribution=%s, template_dictionary=%s",
+            name, url, linux_distribution, template_dictionary
         )
+
         body = {
             'recipe_type': 'kiwi-ng',
             'linux_distribution': linux_distribution,
+            'template_dictionary': template_dictionary,
             'name': name,
         }
         resp = self.session.post(url, json=body)
