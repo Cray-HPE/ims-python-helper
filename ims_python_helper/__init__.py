@@ -144,14 +144,21 @@ class ImsHelper(object):
         if ims_job_id:
             ExtraArgs['Metadata']['x-shasta-ims-job-id'] = ims_job_id
 
-        # Upload the file
-        try:
-            response = self.s3_client.upload_file(
-                artifact, self.s3_bucket, key, ExtraArgs=ExtraArgs
-            )
-        except ClientError as err:
-            LOGGER.error("Error uploading %s: %s", key, err)
-            raise err
+        # Upload the file until it successfully takes. Note: This means we could
+        # be waiting indefinitely for s3 to succeed
+        attempt = 1
+        while True:
+            if attempt <= 300:
+                attempt+=1
+            try:
+                response = self.s3_client.upload_file(
+                    artifact, self.s3_bucket, key, ExtraArgs=ExtraArgs
+                )
+                break
+            except Exception as err:  # pylint: disable=bare-except, broad-except
+                LOGGER.error("Error uploading %s: %s", key, err)
+                LOGGER.error("Re-attempting in %s seconds..." %(attempt))
+                sleep(attempt)
 
         # Retrieve Object ETag
         try:
