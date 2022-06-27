@@ -21,25 +21,25 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 #
+
 """
 Unit tests for resources/images.py
 """
 
+import json
 import os
 import sys
-import json
-import mock
-import re
-import requests
-import responses
 import unittest
 import uuid
+
+import mock
+import requests
+import responses
 
 # Add ims_python_helper to path
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from ims_python_helper import ImsHelper
-import fixtures
 from testtools import TestCase
 
 UPLOAD_TIMEOUT = 500
@@ -163,12 +163,43 @@ class TestImage(TestCase):
         self.assertEqual(fake_recipe_data, resp)
 
     @responses.activate
+    def test_ims_recipe_create_with_template_dictionary(self):
+        """ Test _ims_recipe_create method when get a valid response from IMS. """
+
+        recipe_name = str(mock.sentinel.name)
+
+        fake_recipe_data = {'name': recipe_name}
+        responses.add(responses.POST, '{}/recipes'.format(self.ims_url),
+                      json=fake_recipe_data)
+
+        responses.add(
+            responses.GET, '{}/version'.format(self.ims_url), json={"version": "1.2.3"})
+
+        ims_helper = ImsHelper(self.ims_url, self.session)
+
+        linux_distribution = str(mock.sentinel.linux_distribution)
+        template_dictionary = {'CSM_VERSION': '1.0.0'}
+        resp = ims_helper._ims_recipe_create(
+            recipe_name, linux_distribution, template_dictionary)
+
+        exp_req_data = {
+            'recipe_type': 'kiwi-ng',
+            'linux_distribution': linux_distribution,
+            'template_dictionary': [{'key': k, 'value': v} for k, v in template_dictionary.items()],
+            'name': recipe_name,
+        }
+        self.assertEqual(
+            exp_req_data, json.loads(responses.calls[0].request.body))
+
+        self.assertEqual(fake_recipe_data, resp)
+
+    @responses.activate
     def test_ims_recipe_create_error(self):
         """ Test _ims_recipe_create method when get an invalid response from the server. """
 
         fake_error_data = {'title': 'Bad Request'}
         responses.add(responses.POST, '{}/recipes'.format(self.ims_url),
-            json=fake_error_data, status=400)
+                      json=fake_error_data, status=400)
         responses.add(
             responses.GET, '{}/version'.format(self.ims_url), json={"version": "1.2.3"})
 
