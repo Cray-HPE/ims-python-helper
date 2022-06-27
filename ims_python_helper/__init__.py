@@ -20,7 +20,7 @@
 # OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
-#
+
 """
 Cray Image Management Service ImsHelper Class
 """
@@ -144,14 +144,21 @@ class ImsHelper(object):
         if ims_job_id:
             ExtraArgs['Metadata']['x-shasta-ims-job-id'] = ims_job_id
 
-        # Upload the file
-        try:
-            response = self.s3_client.upload_file(
-                artifact, self.s3_bucket, key, ExtraArgs=ExtraArgs
-            )
-        except ClientError as err:
-            LOGGER.error("Error uploading %s: %s", key, err)
-            raise err
+        # Upload the file until it successfully takes. Note: This means we could
+        # be waiting indefinitely for s3 to succeed
+        attempt = 1
+        while True:
+            if attempt <= 300:
+                attempt+=1
+            try:
+                response = self.s3_client.upload_file(
+                    artifact, self.s3_bucket, key, ExtraArgs=ExtraArgs
+                )
+                break
+            except Exception as err:  # pylint: disable=bare-except, broad-except
+                LOGGER.error("Error uploading %s: %s", key, err)
+                LOGGER.error("Re-attempting in %s seconds..." %(attempt))
+                sleep(attempt)
 
         # Retrieve Object ETag
         try:
@@ -359,7 +366,7 @@ class ImsHelper(object):
             ),
         }
 
-    def recipe_upload(self, name, filepath, distro):
+    def recipe_upload(self, name, filepath, distro, template_dictionary=None):
         """
         Utility function that uploads a recipe to S3 and registers it with IMS.
         Only gzipped tar recipe archives are supported.
@@ -400,10 +407,16 @@ class ImsHelper(object):
                     LOGGER.error("Unable to delete recipe: %s", delete_err)
                     raise err
 
-        LOGGER.info(
-            "Starting recipe_upload; name=%s, file=%s, distro=%s",
-            name, filepath, distro
-        )
+        if template_dictionary:
+            LOGGER.info(
+                "Starting recipe_upload; name=%s, file=%s, distro=%s, template_dictionary=%s",
+                name, filepath, distro, template_dictionary
+            )
+        else:
+            LOGGER.info(
+                "Starting recipe_upload; name=%s, file=%s, distro=%s",
+                name, filepath, distro
+            )
 
         # Get all recipes and filter for the current recipe
         recipes = self._ims_recipes_get()
@@ -418,7 +431,7 @@ class ImsHelper(object):
             )
 
             # Create the recipe record
-            recipe_data = self._ims_recipe_create(name, distro)
+            recipe_data = self._ims_recipe_create(name, distro, template_dictionary)
             LOGGER.info("New recipe created: %s", recipe_data)
 
             # Go on, upload it
@@ -467,7 +480,7 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
-    def _ims_recipe_create(self, name, linux_distribution):
+    def _ims_recipe_create(self, name, linux_distribution=None, template_dictionary=None):
         """
         Create an IMS Recipe record of a kiwi-ng recipe.
 
@@ -480,15 +493,28 @@ class ImsHelper(object):
             requests.exceptions.HTTPError
         """
         url = '/'.join([self.ims_url, 'recipes'])
-        LOGGER.info(
-            "POST %s name=%s, linux_distribution=%s",
-            name, url, linux_distribution
-        )
+
+        if template_dictionary:
+            template_dictionary = [{'key': k, 'value': v} for k, v in template_dictionary.items()]
+            LOGGER.info(
+                "POST %s name=%s, linux_distribution=%s, template_dictionary=%s",
+                name, url, linux_distribution, template_dictionary
+            )
+        else:
+            LOGGER.info(
+                "POST %s name=%s, linux_distribution=%s",
+                name, url, linux_distribution
+            )
+
         body = {
             'recipe_type': 'kiwi-ng',
             'linux_distribution': linux_distribution,
             'name': name,
         }
+
+        if template_dictionary:
+            body['template_dictionary'] = template_dictionary
+
         resp = self.session.post(url, json=body)
         resp.raise_for_status()
         return resp.json()
