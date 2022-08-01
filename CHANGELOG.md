@@ -9,4 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - CASMCMS-7970 - update dev.cray.com server addresses.
 
-[1.0.0] - (no date)
+## [2.9.0] - 2022-06-27
+
+### Added
+- Add support for registering template variables when creating an IMS recipe
