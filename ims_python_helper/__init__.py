@@ -31,6 +31,9 @@ import tempfile
 from datetime import datetime
 
 import sys
+from time import sleep
+from typing import Dict, List, Optional
+
 from pkg_resources import get_distribution
 
 # CASMCMS-4926: Adjust import path while using this library to find
@@ -51,6 +54,10 @@ from requests.packages.urllib3.util.retry import Retry  # noqa: E402
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_IMS_API_URL = 'https://api-gw-service-nmn.local/apis/ims'
+
+
+class ImsImageAlreadyUploaded(Exception):
+    """A populated image with some given name already exists in IMS."""
 
 
 class ImsHelper(object):
@@ -202,6 +209,22 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
+    def _ims_images_get(self) -> List[Dict]:
+        """Get a list of images from IMS"""
+        url = '/'.join([self.ims_url, 'images'])
+        LOGGER.info("GET %s", url)
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _ims_image_get(self, image_id: str) -> Dict:
+        """Get a specific image from IMS"""
+        url = '/'.join([self.ims_url, 'images', image_id])
+        LOGGER.info("GET %s", url)
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
     def _ims_image_create(self, name):
         """ Create a new image record """
         url = '/'.join([self.ims_url, 'images'])
@@ -227,6 +250,40 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp
 
+    def get_empty_image_record_for_name(self, image_name: str) -> Dict:
+        """Get an empty record for an image in IMS with the given name.
+
+        If an image with the given name does not exist, and empty image
+        record will be created. If an empty image record exists, it will
+        be returned. If an uploaded image record exists, then ImsImageExists
+        will be raised.
+
+        Args:
+            image_name: the desired name of the image
+
+        Raises:
+            ImsImageExists: if the image already exists and has been uploaded
+
+        Returns:
+            dict: the empty IMS image record for the image, containing e.g.
+                the name, the id, and the creation timestamp
+        """
+        try:
+            existing_images = self._ims_images_get()
+            for image in existing_images:
+                if image.get("name") == image_name:
+                    if image.get("link"):
+                        raise ImsImageAlreadyUploaded(image_name)
+                    else:
+                        LOGGER.info("Image \"%s\" with ID \"%s\" found, but it has not been "
+                                    "uploaded yet; uploading now.", image_name, image.get("id"))
+                        return image
+        except requests.HTTPError as err:
+            LOGGER.warning("Could not retrieve existing images: %s", err)
+
+        LOGGER.info("No image found in IMS with name \"%s\"; creating.", image_name)
+        return self._ims_image_create(image_name)
+
     def image_upload_artifacts(
             self, image_name, ims_job_id=None, rootfs=None, kernel=None,
             initrd=None, debug=None, boot_parameters=None
@@ -236,16 +293,25 @@ class ImsHelper(object):
         IMS service. The rootfs, kernel, initrd, debug and boot_parameters
         values are expected to be full paths to readable files. Only squashfs
         is currently supported for the rootfs parameter.
+
+        If an image with name `image_name` and a `link` attribute already
+        exists in IMS, then this function will return without uploading anything.
         """
+
         # Stub out the return value of this method
         ret = {
             'result': 'success',
-            'ims_image_record': self._ims_image_create(image_name),
             'ims_image_artifacts': []
         }
 
-        # Create a skeleton image to get an image id
-        image_id = ret['ims_image_record']['id']
+        try:
+            image_record = self.get_empty_image_record_for_name(image_name)
+        except ImsImageAlreadyUploaded:
+            LOGGER.warning("Image with name %s already exists in IMS; skipping.", image_name)
+            return
+
+        ret["ims_image_record"] = image_record
+        image_id = ret["ims_image_record"]["id"]
 
         # Generate the arguments (artifacts) to be sent for upload
         key = "{}/%s".format(image_id)

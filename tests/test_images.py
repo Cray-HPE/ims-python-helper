@@ -39,7 +39,7 @@ import responses
 # Add ims_python_helper to path
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-from ims_python_helper import ImsHelper
+from ims_python_helper import ImsHelper, ImsImageAlreadyUploaded
 from testtools import TestCase
 
 UPLOAD_TIMEOUT = 500
@@ -62,6 +62,32 @@ class TestImage(TestCase):
         self.test_debug = []
         self.test_other = []
         self.test_job_status = "waiting_on_user"
+
+        self.existing_ims_images = [
+            {
+                "created": "2022-01-01T00:00:00.00000+00:00",
+                "id": "f6c13ec7-89d1-4420-8f1d-1736b2d235cb",
+                "link": {
+                    "etag": "d3b07384d113edec49eaa6238ad5ff00",
+                    "path": "s3://boot-images/f6c13ec7-89d1-4420-8f1d-1736b2d235cb/manifest.json",
+                    "type": "s3"
+                },
+                "name": "image_that_has_been_uploaded"
+            },
+            {
+                "created": "2022-01-01T00:00:00.00000+00:00",
+                "id": "d8a34ae4-ff5d-4ff7-b625-27e89006a428",
+                "name": "image_created_but_not_uploaded"
+            },
+        ]
+        self.new_ims_image = {
+            "created": "2022-01-01T00:00:00.00000+00:00",
+            "id": "602f9848-835c-49c8-833c-0fd4bb5c526f",
+            "name": "newly_created_image"
+        }
+        self.rootfs = 'rootfs.squashfs'
+        self.kernel = 'vmlinuz'
+        self.initrd = 'barebones.initrd'
 
     @responses.activate
     def test_image_set_job_status(self):
@@ -105,6 +131,39 @@ class TestImage(TestCase):
         self.assertEqual(result['ims_job_record']['status'], self.test_job_status)
 
     @responses.activate
+    def test_get_empty_image_record_for_new_image(self):
+        """Test images are created when getting an empty image that doesn't exist"""
+        responses.add(
+            responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
+        )
+        responses.add(responses.POST, f'{self.ims_url}/images', status=201, json=self.new_ims_image)
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('newly_created_image')
+        assert result == self.new_ims_image
+
+    @responses.activate
+    def test_get_empty_image_record_for_existing_empty_image(self):
+        """Test images are not uploaded when an empty image of the same name already exists in IMS."""
+        responses.add(
+            responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
+        )
+        responses.add(responses.POST, f'{self.ims_url}/images', status=201)
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_created_but_not_uploaded')
+        assert result == self.existing_ims_images[1]
+
+    @responses.activate
+    def test_get_empty_image_record_for_existing_uploaded_image(self):
+        """Test images are not uploaded when a populated image of the same name already exists in IMS."""
+        responses.add(
+            responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
+        )
+        responses.add(responses.POST, f'{self.ims_url}/images', status=201)
+
+        def should_raise():
+            ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_that_has_been_uploaded')
+
+        self.assertRaises(ImsImageAlreadyUploaded, should_raise)
+
+    @responses.activate
     def test_ims_recipes_get(self):
         """ Test _ims_recipes_get method when get a valid response from IMS. """
         exp_recipes = [{'name': 'example'}]
@@ -141,7 +200,7 @@ class TestImage(TestCase):
 
         fake_recipe_data = {'name': recipe_name}
         responses.add(responses.POST, '{}/recipes'.format(self.ims_url),
-            json=fake_recipe_data)
+                      json=fake_recipe_data)
 
         responses.add(
             responses.GET, '{}/version'.format(self.ims_url), json={"version": "1.2.3"})
