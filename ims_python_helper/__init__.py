@@ -255,14 +255,15 @@ class ImsHelper(object):
 
         If an image with the given name does not exist, and empty image
         record will be created. If an empty image record exists, it will
-        be returned. If an uploaded image record exists, then ImsImageExists
-        will be raised.
+        be returned. If an uploaded image record exists, then
+        ImsImageAlreadyUploaded will be raised.
 
         Args:
             image_name: the desired name of the image
 
         Raises:
-            ImsImageExists: if the image already exists and has been uploaded
+            ImsImageAlreadyUploaded: if the image already exists and
+                has been uploaded
 
         Returns:
             dict: the empty IMS image record for the image, containing e.g.
