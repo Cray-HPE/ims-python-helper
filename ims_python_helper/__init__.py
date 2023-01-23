@@ -32,7 +32,7 @@ from datetime import datetime
 
 import sys
 from time import sleep
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from pkg_resources import get_distribution
 
