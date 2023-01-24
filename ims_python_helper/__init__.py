@@ -253,7 +253,7 @@ class ImsHelper(object):
     def get_empty_image_record_for_name(self, image_name: str) -> Dict:
         """Get an empty record for an image in IMS with the given name.
 
-        If an image with the given name does not exist, and empty image
+        If an image with the given name does not exist, an empty image
         record will be created. If an empty image record exists, it will
         be returned. If an uploaded image record exists, then
         ImsImageAlreadyUploaded will be raised.
@@ -261,13 +261,13 @@ class ImsHelper(object):
         Args:
             image_name: the desired name of the image
 
-        Raises:
-            ImsImageAlreadyUploaded: if the image already exists and
-                has been uploaded
-
         Returns:
             dict: the empty IMS image record for the image, containing e.g.
                 the name, the id, and the creation timestamp
+
+        Raises:
+            ImsImageAlreadyUploaded: if the image already exists and
+                has been uploaded
         """
         try:
             existing_images = self._ims_images_get()

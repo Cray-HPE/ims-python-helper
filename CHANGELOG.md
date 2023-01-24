@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.11.0] - 2023-01-17
-- Change `ImsHelper.image_upload_artifacts()` to skip uploading an image
-  for which there is already an image with a matching name in IMS which has
-  associated artifacts.
+### Changed
+- Change `ImsHelper.image_upload_artifacts()` to add an option to skip 
+  uploading an image for which there is already an image with a matching 
+  name in IMS which has associated artifacts.
 
 ## [2.10.2] - 2022-12-20
 ### Added
