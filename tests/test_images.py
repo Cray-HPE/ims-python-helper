@@ -137,7 +137,7 @@ class TestImage(TestCase):
             responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
         )
         responses.add(responses.POST, f'{self.ims_url}/images', status=201, json=self.new_ims_image)
-        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('newly_created_image')
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('newly_created_image', skip_existing=True)
         assert result == self.new_ims_image
 
     @responses.activate
@@ -147,7 +147,7 @@ class TestImage(TestCase):
             responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
         )
         responses.add(responses.POST, f'{self.ims_url}/images', status=201)
-        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_created_but_not_uploaded')
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_created_but_not_uploaded', skip_existing=True)
         assert result == self.existing_ims_images[1]
 
     @responses.activate
@@ -159,7 +159,7 @@ class TestImage(TestCase):
         responses.add(responses.POST, f'{self.ims_url}/images', status=201)
 
         def should_raise():
-            ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_that_has_been_uploaded')
+            ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_that_has_been_uploaded', skip_existing=True)
 
         self.assertRaises(ImsImageAlreadyUploaded, should_raise)
 
