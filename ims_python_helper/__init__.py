@@ -31,6 +31,9 @@ import tempfile
 from datetime import datetime
 
 import sys
+from time import sleep
+from typing import Dict, List
+
 from pkg_resources import get_distribution
 
 # CASMCMS-4926: Adjust import path while using this library to find
@@ -51,6 +54,20 @@ from requests.packages.urllib3.util.retry import Retry  # noqa: E402
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_IMS_API_URL = 'https://api-gw-service-nmn.local/apis/ims'
+
+
+class ImsImageAlreadyUploaded(Exception):
+    """A populated image with some given name already exists in IMS."""
+
+    def __init__(self, image_record: Dict, *args):
+        super().__init__(*args)
+        self.image_record = image_record
+
+    def __str__(self):
+        return "image with name \"{}\" already exists in IMS (ID: {})".format(
+            self.image_record.get("name"),
+            self.image_record.get("id"),
+        )
 
 
 class ImsHelper(object):
@@ -202,6 +219,22 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
+    def _ims_images_get(self) -> List[Dict]:
+        """Get a list of images from IMS"""
+        url = '/'.join([self.ims_url, 'images'])
+        LOGGER.info("GET %s", url)
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _ims_image_get(self, image_id: str) -> Dict:
+        """Get a specific image from IMS"""
+        url = '/'.join([self.ims_url, 'images', image_id])
+        LOGGER.info("GET %s", url)
+        resp = self.session.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
     def _ims_image_create(self, name):
         """ Create a new image record """
         url = '/'.join([self.ims_url, 'images'])
@@ -227,25 +260,75 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp
 
+    def get_empty_image_record_for_name(self, image_name: str, skip_existing: bool) -> Dict:
+        """Get an empty record for an image in IMS with the given name.
+
+        If an image with the given name does not exist, an empty image
+        record will be created. If an empty image record exists, it will
+        be returned. If an uploaded image record exists, then
+        ImsImageAlreadyUploaded will be raised with the given image record
+        if `skip_existing` is True, and a new image will be created and
+        returned if `skip_existing` is False.
+
+        Args:
+            image_name: the desired name of the image
+            skip_existing: if True, check if an image exists with the name
+                `image_name`. If it exists, check if it has a `link` attribute
+
+        Returns:
+            dict: the empty IMS image record for the image, containing e.g.
+                the name, the id, and the creation timestamp
+
+        Raises:
+            ImsImageAlreadyUploaded: if the image already exists and
+                has been uploaded, and `skip_existing` is True
+        """
+        if skip_existing:
+            try:
+                existing_images = self._ims_images_get()
+                for image in existing_images:
+                    if image.get("name") == image_name:
+                        if image.get("link"):
+                            raise ImsImageAlreadyUploaded(image)
+                        else:
+                            LOGGER.info("Image \"%s\" with ID \"%s\" found, but it has not been "
+                                        "uploaded yet.", image_name, image.get("id"))
+                            return image
+            except requests.HTTPError as err:
+                LOGGER.warning("Could not retrieve existing images: %s", err)
+
+        LOGGER.info("Creating image with name \"%s\"", image_name)
+        return self._ims_image_create(image_name)
+
     def image_upload_artifacts(
             self, image_name, ims_job_id=None, rootfs=None, kernel=None,
-            initrd=None, debug=None, boot_parameters=None
+            initrd=None, debug=None, boot_parameters=None, skip_existing=False,
     ):
         """
         Utility function to upload and register any image artifacts with the
         IMS service. The rootfs, kernel, initrd, debug and boot_parameters
         values are expected to be full paths to readable files. Only squashfs
         is currently supported for the rootfs parameter.
+
+        If `skip_existing` is True and an image with name `image_name` and a
+        `link` attribute already exists in IMS, then this function will return
+        the existing image record without uploading anything.
         """
+
         # Stub out the return value of this method
         ret = {
             'result': 'success',
-            'ims_image_record': self._ims_image_create(image_name),
             'ims_image_artifacts': []
         }
 
-        # Create a skeleton image to get an image id
-        image_id = ret['ims_image_record']['id']
+        try:
+            image_record = self.get_empty_image_record_for_name(image_name, skip_existing)
+        except ImsImageAlreadyUploaded as exc:
+            LOGGER.warning("Image with name %s already exists in IMS; skipping.", image_name)
+            return exc.image_record
+
+        ret["ims_image_record"] = image_record
+        image_id = ret["ims_image_record"]["id"]
 
         # Generate the arguments (artifacts) to be sent for upload
         key = "{}/%s".format(image_id)
