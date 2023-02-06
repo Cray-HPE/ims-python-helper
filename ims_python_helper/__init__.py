@@ -325,7 +325,8 @@ class ImsHelper(object):
             image_record = self.get_empty_image_record_for_name(image_name, skip_existing)
         except ImsImageAlreadyUploaded as exc:
             LOGGER.warning("Image with name %s already exists in IMS; skipping.", image_name)
-            return exc.image_record
+            ret['ims_image_record'] = exc.image_record
+            return ret
 
         ret["ims_image_record"] = image_record
         image_id = ret["ims_image_record"]["id"]
@@ -344,6 +345,9 @@ class ImsHelper(object):
         if boot_parameters:
             to_upload.append(('application/vnd.cray.image.parameters.boot', key % 'boot_parameters',
                               boot_parameters[0]))  # noqa: E501
+        if not to_upload:
+            LOGGER.info("No image artifacts supplied for image %s; not uploading anything.", image_name)
+            return ret
 
         # Upload the files in series
         LOGGER.info(
