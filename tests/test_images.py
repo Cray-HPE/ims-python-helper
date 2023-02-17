@@ -137,7 +137,7 @@ class TestImage(TestCase):
             responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
         )
         responses.add(responses.POST, f'{self.ims_url}/images', status=201, json=self.new_ims_image)
-        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('newly_created_image')
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('newly_created_image', skip_existing=True)
         assert result == self.new_ims_image
 
     @responses.activate
@@ -147,8 +147,16 @@ class TestImage(TestCase):
             responses.GET, f'{self.ims_url}/images', json=self.existing_ims_images
         )
         responses.add(responses.POST, f'{self.ims_url}/images', status=201)
-        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_created_but_not_uploaded')
+        result = ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_created_but_not_uploaded', skip_existing=True)
         assert result == self.existing_ims_images[1]
+
+    def test_get_existing_image_record(self):
+        """Test that an "ims_image_record" key is returned by image_upload_artifacts()"""
+        image_record = self.existing_ims_images[0]
+        with mock.patch('ims_python_helper.ImsHelper.get_empty_image_record_for_name',
+                        side_effect=ImsImageAlreadyUploaded(image_record)):
+            result = ImsHelper(self.ims_url, self.session).image_upload_artifacts('image_that_has_been_uploaded')
+            self.assertEqual(result['ims_image_record'], self.existing_ims_images[0])
 
     @responses.activate
     def test_get_empty_image_record_for_existing_uploaded_image(self):
@@ -159,7 +167,7 @@ class TestImage(TestCase):
         responses.add(responses.POST, f'{self.ims_url}/images', status=201)
 
         def should_raise():
-            ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_that_has_been_uploaded')
+            ImsHelper(self.ims_url, self.session).get_empty_image_record_for_name('image_that_has_been_uploaded', skip_existing=True)
 
         self.assertRaises(ImsImageAlreadyUploaded, should_raise)
 
