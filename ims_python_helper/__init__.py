@@ -472,6 +472,16 @@ class ImsHelper(object):
         Returns:
             The [new/updated/existing] recipe in json format.
         """
+        def artifact_path(recipe_id: str) -> str:
+            """Get the artifact path within an S3 bucket.
+
+            Args:
+                recipe_id: IMS ID of the recipe
+
+            Returns:
+                the path to the recipe artifact within some S3 bucket.
+            """
+            return 'recipes/{}/recipe.tar.gz'.format(recipe_id)
 
         def s3_upload_recipe(name, recipe_id, filepath):
             """
@@ -481,7 +491,7 @@ class ImsHelper(object):
             try:
                 return self._artifact_processor(
                     'application/x-compressed-tar',
-                    'recipes/{}/recipe.tar.gz'.format(recipe_id), filepath
+                    artifact_path(recipe_id), filepath
                 )
             except ClientError as err:
                 LOGGER.error("Error occurred trying to upload recipe: %s", err)
@@ -529,27 +539,48 @@ class ImsHelper(object):
                 recipe_data['id'], {'link': recipe_meta['link']}
             )
 
-        # A recipe matched, hopefully only one.
-        recipe = filtered_recipes[0]
+        # At least one recipe matched the given name. Check if any have the same artifacts.
+        empty_recipe = None
+        for recipe in filtered_recipes:
+            if recipe['link']:
+                try:
+                    recipe_obj = self.s3_resource.Object(self.s3_bucket, artifact_path(recipe['id']))
+                    if recipe_obj.metadata.get('md5sum') == self._md5(filepath):
+                        LOGGER.info("The %s recipe has already been uploaded (ID: %s); nothing to do.",
+                                    name, recipe['id'])
+                        return recipe
+
+                except ClientError as err:
+                    LOGGER.error("Could not retrieve S3 object metadata for recipe %s; %s", recipe['id'], err)
+            else:
+                empty_recipe = recipe
 
         # Recipe exists, but no link info exists, meaning it was created but
         # was not successfully uploaded and associated.
-        if recipe['link'] is None:
+        if empty_recipe:
             LOGGER.info(
-                "The %r recipe already exists. But has not been uploaded yet. "
-                "Uploading now.", name
+                "The %r recipe already exists with ID %s but has not been uploaded yet. "
+                "Uploading now.", name, empty_recipe['id']
             )
 
             # Go on, upload it
-            recipe_meta = s3_upload_recipe(name, recipe['id'], filepath)
+            recipe_meta = s3_upload_recipe(name, empty_recipe['id'], filepath)
 
             # Patch the recipe record with the link information
             return self._ims_recipe_patch(
-                recipe['id'], {'link': recipe_meta['link']}
+                empty_recipe['id'], {'link': recipe_meta['link']}
             )
 
-        LOGGER.info("The %r recipe already exists; nothing to do.", name)
-        return recipe
+        new_recipe = self._ims_recipe_create(name, distro, template_dictionary)
+        LOGGER.info("New recipe created: %s", new_recipe)
+
+        # Go on, upload it
+        recipe_meta = s3_upload_recipe(name, new_recipe['id'], filepath)
+
+        # Patch the recipe record with the link information
+        return self._ims_recipe_patch(
+            new_recipe['id'], {'link': recipe_meta['link']}
+        )
 
     def _ims_recipes_get(self):
         """
