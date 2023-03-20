@@ -472,6 +472,12 @@ class ImsHelper(object):
         Returns:
             The [new/updated/existing] recipe in json format.
         """
+        def transform_kv_pairs(pairs: List[Dict[str, str]]) -> Dict[str, str]:
+            return {
+                pair['key']: pair['value']
+                for pair in pairs
+            }
+
         def artifact_path(recipe_id: str) -> str:
             """Get the artifact path within an S3 bucket.
 
@@ -544,10 +550,13 @@ class ImsHelper(object):
         for recipe in filtered_recipes:
             if recipe['link']:
                 try:
+                    recipe_template_dict = {pair['key']: pair['value'] for pair in recipe['template_dictionary']}
                     recipe_obj = self.s3_resource.Object(self.s3_bucket, artifact_path(recipe['id']))
-                    if recipe_obj.metadata.get('md5sum') == self._md5(filepath):
-                        LOGGER.info("The %s recipe has already been uploaded (ID: %s); nothing to do.",
-                                    name, recipe['id'])
+                    if recipe_obj.metadata.get('md5sum') == self._md5(filepath) \
+                            and template_dictionary == recipe_template_dict:
+                        LOGGER.info('Recipe "%s" has already been uploaded (IMS recipe with ID "%s" and template '
+                                    'dictionary %r already exists); nothing to do.',
+                                    name, recipe['id'], template_dictionary)
                         return recipe
 
                 except ClientError as err:
