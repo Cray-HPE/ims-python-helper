@@ -52,6 +52,7 @@ import requests_oauthlib  # noqa: E402
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning  # noqa: E402
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error  # noqa: E402
+from enum import Enum
 from ims_python_helper import ImsHelper, DEFAULT_IMS_API_URL  # noqa: E402
 # pylint: enable=wrong-import-position
 
@@ -88,7 +89,6 @@ def my_uuid4_regex_type(string_input, pat=UUID_PATTERN):
     if not pat.match(string_input):
         raise argparse.ArgumentTypeError
     return string_input
-
 
 def add_image_upload_artifacts_parser(subparsers, parent_parser):
     """ Add image create sub-parser and arguments """
@@ -136,6 +136,10 @@ def add_image_upload_artifacts_parser(subparsers, parent_parser):
         help='filename of boot parameters file to upload and register'
     )
 
+    parser.add_argument(
+        '--platform', type=str, choices=['aarch64', 'x86_64'], default='x86_64',
+        action='store', help='Platform for the image being uploaded'
+    )
 
 def add_image_set_job_status(subparsers, parent_parser):
     """ Add image create sub-parser and arguments """
