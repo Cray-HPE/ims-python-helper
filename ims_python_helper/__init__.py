@@ -472,12 +472,6 @@ class ImsHelper(object):
         Returns:
             The [new/updated/existing] recipe in json format.
         """
-        def transform_kv_pairs(pairs: List[Dict[str, str]]) -> Dict[str, str]:
-            return {
-                pair['key']: pair['value']
-                for pair in pairs
-            }
-
         def artifact_path(recipe_id: str) -> str:
             """Get the artifact path within an S3 bucket.
 
@@ -526,31 +520,12 @@ class ImsHelper(object):
         LOGGER.debug("Existing recipes: %s", recipes)
         filtered_recipes = [r for r in recipes if r['name'] == name]
 
-        # No recipe match, this is a new one that needs to be uploaded.
-        if not filtered_recipes:
-            LOGGER.info(
-                "A recipe with the %r name wasn't found. "
-                "Creating initial recipe...", name
-            )
-
-            # Create the recipe record
-            recipe_data = self._ims_recipe_create(name, distro, template_dictionary)
-            LOGGER.info("New recipe created: %s", recipe_data)
-
-            # Go on, upload it
-            recipe_meta = s3_upload_recipe(name, recipe_data['id'], filepath)
-
-            # Patch the recipe record with the link information
-            return self._ims_recipe_patch(
-                recipe_data['id'], {'link': recipe_meta['link']}
-            )
-
         # At least one recipe matched the given name. Check if any have the same artifacts.
         empty_recipe = None
         for recipe in filtered_recipes:
             if recipe['link']:
                 try:
-                    recipe_template_dict = {pair['key']: pair['value'] for pair in recipe['template_dictionary']}
+                    recipe_template_dict = {pair['key']: pair['value'] for pair in recipe.get('template_dictionary', [])}
                     recipe_obj = self.s3_resource.Object(self.s3_bucket, artifact_path(recipe['id']))
                     if recipe_obj.metadata.get('md5sum') == self._md5(filepath) \
                             and template_dictionary == recipe_template_dict:
@@ -576,10 +551,17 @@ class ImsHelper(object):
             recipe_meta = s3_upload_recipe(name, empty_recipe['id'], filepath)
 
             # Patch the recipe record with the link information
+            patch_data = {'link': recipe_meta['link']}
+            if template_dictionary:
+                patch_data['template_dictionary'] = template_dictionary
+
             return self._ims_recipe_patch(
-                empty_recipe['id'], {'link': recipe_meta['link']}
+                empty_recipe['id'],
+                patch_data,
             )
 
+        LOGGER.info("No recipe with matching name, artifacts, and template "
+                    "dictionary was found. Creating new recipe...")
         new_recipe = self._ims_recipe_create(name, distro, template_dictionary)
         LOGGER.info("New recipe created: %s", new_recipe)
 

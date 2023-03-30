@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.12.0] - 2023-03-27
 ### Changed
 - Changed the behavior of `ImsHelper.recipe_upload()` to only skip uploading a
-  recipe if the artifact MD5 sums match, not just of the IMS image names match.
+  recipe if the artifact MD5 sums match, not just if the IMS image names match.
 
 
 ## [2.11.1] - 2023-02-06
