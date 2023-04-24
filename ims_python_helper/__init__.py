@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2018-2022 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2018-2023 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -25,14 +25,15 @@
 Cray Image Management Service ImsHelper Class
 """
 import hashlib
+import io
 import json
 import logging
+import sys
 import tempfile
 from datetime import datetime
-
-import sys
 from time import sleep
-from typing import Dict, List
+from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 from pkg_resources import get_distribution
 
@@ -44,29 +45,37 @@ from pkg_resources import get_distribution
 sys.path.insert(0, '/opt/cray/crayctl/lib/python2.7/site-packages')
 
 # pylint: disable=wrong-import-position
-from botocore.exceptions import ClientError  # noqa: E402
 import boto3  # noqa: E402
 import requests  # noqa: E402
+from botocore.exceptions import ClientError  # noqa: E402
 from requests.adapters import HTTPAdapter  # noqa: E402
 from requests.packages.urllib3.util.retry import Retry  # noqa: E402
+
 # pylint: enable=wrong-import-position
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_IMS_API_URL = 'https://api-gw-service-nmn.local/apis/ims'
 
+INITRD_ARTIFACT_TYPE = 'application/vnd.cray.image.initrd'
+KERNEL_ARTIFACT_TYPE = 'application/vnd.cray.image.kernel'
+SQUASHFS_ARTIFACT_TYPE = 'application/vnd.cray.image.rootfs.squashfs'
+DEBUG_KERNEL_ARTIFACT_TYPE = 'application/vnd.cray.image.debug.kernel'
+BOOT_PARAMS_ARTIFACT_TYPE = 'application/vnd.cray.image.parameters.boot'
 
-class ImsImageAlreadyUploaded(Exception):
+
+class ImsImagesExistWithName(Exception):
     """A populated image with some given name already exists in IMS."""
 
-    def __init__(self, image_record: Dict, *args):
+    def __init__(self, name: str, image_records: List[Dict], *args):
         super().__init__(*args)
-        self.image_record = image_record
+        self.name = name
+        self.image_records = image_records
 
     def __str__(self):
-        return "image with name \"{}\" already exists in IMS (ID: {})".format(
-            self.image_record.get("name"),
-            self.image_record.get("id"),
+        return "images with name \"{}\" already exist in IMS (ID(s): {})".format(
+            self.name,
+            ', '.join(r.get("id") for r in self.image_records)
         )
 
 
@@ -113,6 +122,98 @@ class ImsHelper(object):
             for chunk in iter(lambda: afile.read(4096), b""):
                 hashmd5.update(chunk)
         return hashmd5.hexdigest()
+
+    def get_image_manifest(self, record: dict) -> Optional[dict]:
+        """Get a parsed manifest for an IMS image
+
+        Args:
+            record: an image record from IMS
+
+        Returns:
+            the parsed JSON manifest which the image points to,
+            or None if there is no associated manifest or link,
+            or if there is a problem retrieving the manifest
+            from S3.
+        """
+        link = record.get('link')
+        if not link:
+            return None
+
+        with io.BytesIO() as manifest_buffer:
+            manifest_url = link.get('path')
+            if not manifest_url:
+                return None
+            parsed_manifest_path = urlparse(manifest_url)
+            bucket_name = parsed_manifest_path.netloc
+            manifest_path = parsed_manifest_path.path.strip('/')
+
+            try:
+                LOGGER.debug("Retrieving manifest; bucket: %s, path: %s",
+                             bucket_name, manifest_path)
+                self.s3_client.download_fileobj(bucket_name, manifest_path, manifest_buffer)
+            except ClientError as err:
+                LOGGER.warning('Could not retrieve manifest from URL "%s"; skipping image (%s)',
+                               manifest_url, err)
+                return None
+            return json.loads(manifest_buffer.getvalue().decode())
+
+    def artifacts_match_image_record(
+            self,
+            record: dict,
+            name: str,
+            rootfs_path: Optional[str] = None,
+            kernel_path: Optional[str] = None,
+            initrd_path: Optional[str] = None,
+            debug_kernel: Optional[str] = None,
+            boot_params: Optional[str] = None,
+    ) -> bool:
+        """Check if all the artifacts match a single image record.
+
+        Args:
+            record: an image record from IMS
+            name: the name of the image associated with the artifacts
+                given in the paths in the following arguments
+            rootfs_path: path to the rootfs artifact, if provided
+            kernel_path: path to the kernel artifact, if provided
+            initrd_path: path to the initrd artifact, if provided
+            debug_kernel: path to the debug kernel artifact, if provided
+            boot_params: path to the kernel boot parameters, if provided
+
+        Returns:
+            True if the artifacts at the given paths have the same MD5
+            checksums listed in the image record, and the name matches,
+            or False otherwise.
+        """
+        manifest = self.get_image_manifest(record)
+        if manifest is None:
+            return False
+
+        cmp_dict = {'name': name}
+        if rootfs_path:
+            cmp_dict['rootfs'] = self._md5(rootfs_path)
+        if kernel_path:
+            cmp_dict['kernel'] = self._md5(kernel_path)
+        if initrd_path:
+            cmp_dict['initrd'] = self._md5(initrd_path)
+        if debug_kernel:
+            cmp_dict['debug_kernel'] = self._md5(debug_kernel)
+        if boot_params:
+            cmp_dict['boot_params'] = self._md5(boot_params)
+
+        cmp_dict_key_to_artifact_type = {
+            'rootfs': SQUASHFS_ARTIFACT_TYPE,
+            'kernel': KERNEL_ARTIFACT_TYPE,
+            'initrd': INITRD_ARTIFACT_TYPE,
+            'debug_kernel': DEBUG_KERNEL_ARTIFACT_TYPE,
+            'boot_params': BOOT_PARAMS_ARTIFACT_TYPE,
+        }
+
+        manifest_cmp_dict = {'name': name}
+        for key, artifact_type in cmp_dict_key_to_artifact_type.items():
+            for artifact in manifest.get('artifacts', []):
+                if artifact.get('type') == artifact_type:
+                    manifest_cmp_dict[key] = artifact['md5']
+        return manifest_cmp_dict == cmp_dict
 
     def _artifact_processor(
             self, artifact_type, key, artifact, image_id=None, image_name=None,
@@ -260,13 +361,17 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp
 
-    def get_empty_image_record_for_name(self, image_name: str, skip_existing: bool) -> Dict:
+    def get_empty_image_record_for_name(
+            self,
+            image_name: str,
+            skip_existing: bool
+    ) -> Dict:
         """Get an empty record for an image in IMS with the given name.
 
         If an image with the given name does not exist, an empty image
         record will be created. If an empty image record exists, it will
         be returned. If an uploaded image record exists, then
-        ImsImageAlreadyUploaded will be raised with the given image record
+        ImsImageExistsWithName will be raised with the given image record
         if `skip_existing` is True, and a new image will be created and
         returned if `skip_existing` is False.
 
@@ -280,20 +385,29 @@ class ImsHelper(object):
                 the name, the id, and the creation timestamp
 
         Raises:
-            ImsImageAlreadyUploaded: if the image already exists and
+            ImsImageExistsWithName: if the image already exists and
                 has been uploaded, and `skip_existing` is True
         """
         if skip_existing:
+            matching_uploaded_images = []
+            matching_empty_images = []
             try:
                 existing_images = self._ims_images_get()
                 for image in existing_images:
                     if image.get("name") == image_name:
                         if image.get("link"):
-                            raise ImsImageAlreadyUploaded(image)
+                            matching_uploaded_images.append(image)
                         else:
-                            LOGGER.info("Image \"%s\" with ID \"%s\" found, but it has not been "
-                                        "uploaded yet.", image_name, image.get("id"))
-                            return image
+                            matching_empty_images.append(image)
+                if matching_uploaded_images:
+                    raise ImsImagesExistWithName(image_name, matching_uploaded_images)
+                if matching_empty_images:
+                    LOGGER.info("Found image(s) without artifact links: %s"
+                                ", ".join(i["id"] for i in matching_empty_images))
+                    empty_image = matching_empty_images.pop()
+                    LOGGER.info("Uploading image artifacts to empty image with ID \"%s\"",
+                                empty_image["id"])
+                    return empty_image
             except requests.HTTPError as err:
                 LOGGER.warning("Could not retrieve existing images: %s", err)
 
@@ -310,10 +424,24 @@ class ImsHelper(object):
         values are expected to be full paths to readable files. Only squashfs
         is currently supported for the rootfs parameter.
 
-        If `skip_existing` is True and an image with name `image_name` and a
-        `link` attribute already exists in IMS, then this function will return
-        the existing image record without uploading anything.
+        If `skip_existing` is True and any number of images with name
+        `image_name` and a `link` attribute already exist in IMS, then this
+        function will return one of those existing image record without
+        uploading anything if the checksums of all artifacts in any of those
+        images matches the checksums of the artifacts passed into this function
+        (i.e. `rootfs`, `kernel`, `initrd`, `debug`, and `boot_parameters`.)
         """
+
+        if rootfs:
+            rootfs = rootfs[0]
+        if kernel:
+            kernel = kernel[0]
+        if initrd:
+            initrd = initrd[0]
+        if debug:
+            debug = debug[0]
+        if boot_parameters:
+            boot_parameters = boot_parameters[0]
 
         # Stub out the return value of this method
         ret = {
@@ -323,10 +451,22 @@ class ImsHelper(object):
 
         try:
             image_record = self.get_empty_image_record_for_name(image_name, skip_existing)
-        except ImsImageAlreadyUploaded as exc:
-            LOGGER.warning("Image with name %s already exists in IMS; skipping.", image_name)
-            ret['ims_image_record'] = exc.image_record
-            return ret
+        except ImsImagesExistWithName as exc:
+            for matching_image_record in exc.image_records:
+                LOGGER.info("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
+                            "checking contents.", image_name, matching_image_record['id'])
+                if self.artifacts_match_image_record(matching_image_record, image_name, rootfs, kernel,
+                                                     initrd, debug, boot_parameters):
+                    LOGGER.warning("Artifacts match checksums listed in manifest for image with name \"%s\"; skipping.",
+                                   image_name)
+                    ret["ims_image_record"] = matching_image_record
+                    return ret
+                else:
+                    LOGGER.info("Artifacts in existing image with ID \"%s\" do not match; checking other images",
+                                matching_image_record["id"])
+            LOGGER.info("No existing image with name \"%s\" contains matching artifacts.",
+                        image_name)
+            image_record = self._ims_image_create(image_name)
 
         ret["ims_image_record"] = image_record
         image_id = ret["ims_image_record"]["id"]
@@ -335,16 +475,16 @@ class ImsHelper(object):
         key = "{}/%s".format(image_id)
         to_upload = []
         if rootfs:
-            to_upload.append(('application/vnd.cray.image.rootfs.squashfs', key % 'rootfs', rootfs[0]))  # noqa: E501
+            to_upload.append((SQUASHFS_ARTIFACT_TYPE, key % 'rootfs', rootfs))  # noqa: E501
         if kernel:
-            to_upload.append(('application/vnd.cray.image.kernel', key % 'kernel', kernel[0]))  # noqa: E501
+            to_upload.append((KERNEL_ARTIFACT_TYPE, key % 'kernel', kernel))  # noqa: E501
         if initrd:
-            to_upload.append(('application/vnd.cray.image.initrd', key % 'initrd', initrd[0]))  # noqa: E501
+            to_upload.append((INITRD_ARTIFACT_TYPE, key % 'initrd', initrd))  # noqa: E501
         if debug:
-            to_upload.append(('application/vnd.cray.image.debug.kernel', key % 'debug_kernel', debug[0]))  # noqa: E501
+            to_upload.append((DEBUG_KERNEL_ARTIFACT_TYPE, key % 'debug_kernel', debug))  # noqa: E501
         if boot_parameters:
-            to_upload.append(('application/vnd.cray.image.parameters.boot', key % 'boot_parameters',
-                              boot_parameters[0]))  # noqa: E501
+            to_upload.append((BOOT_PARAMS_ARTIFACT_TYPE, key % 'boot_parameters',
+                              boot_parameters))  # noqa: E501
         if not to_upload:
             LOGGER.info("No image artifacts supplied for image %s; not uploading anything.", image_name)
             return ret
@@ -472,6 +612,16 @@ class ImsHelper(object):
         Returns:
             The [new/updated/existing] recipe in json format.
         """
+        def artifact_path(recipe_id: str) -> str:
+            """Get the artifact path within an S3 bucket.
+
+            Args:
+                recipe_id: IMS ID of the recipe
+
+            Returns:
+                the path to the recipe artifact within some S3 bucket.
+            """
+            return 'recipes/{}/recipe.tar.gz'.format(recipe_id)
 
         def s3_upload_recipe(name, recipe_id, filepath):
             """
@@ -481,7 +631,7 @@ class ImsHelper(object):
             try:
                 return self._artifact_processor(
                     'application/x-compressed-tar',
-                    'recipes/{}/recipe.tar.gz'.format(recipe_id), filepath
+                    artifact_path(recipe_id), filepath
                 )
             except ClientError as err:
                 LOGGER.error("Error occurred trying to upload recipe: %s", err)
@@ -510,46 +660,58 @@ class ImsHelper(object):
         LOGGER.debug("Existing recipes: %s", recipes)
         filtered_recipes = [r for r in recipes if r['name'] == name]
 
-        # No recipe match, this is a new one that needs to be uploaded.
-        if not filtered_recipes:
-            LOGGER.info(
-                "A recipe with the %r name wasn't found. "
-                "Creating initial recipe...", name
-            )
+        # At least one recipe matched the given name. Check if any have the same artifacts.
+        empty_recipe = None
+        for recipe in filtered_recipes:
+            if recipe['link']:
+                try:
+                    recipe_template_dict = {pair['key']: pair['value'] for pair in recipe.get('template_dictionary', [])}
+                    recipe_obj = self.s3_resource.Object(self.s3_bucket, artifact_path(recipe['id']))
+                    if recipe_obj.metadata.get('md5sum') == self._md5(filepath) \
+                            and template_dictionary == recipe_template_dict:
+                        LOGGER.info('Recipe "%s" has already been uploaded (IMS recipe with ID "%s" and template '
+                                    'dictionary %r already exists); nothing to do.',
+                                    name, recipe['id'], template_dictionary)
+                        return recipe
 
-            # Create the recipe record
-            recipe_data = self._ims_recipe_create(name, distro, template_dictionary)
-            LOGGER.info("New recipe created: %s", recipe_data)
-
-            # Go on, upload it
-            recipe_meta = s3_upload_recipe(name, recipe_data['id'], filepath)
-
-            # Patch the recipe record with the link information
-            return self._ims_recipe_patch(
-                recipe_data['id'], {'link': recipe_meta['link']}
-            )
-
-        # A recipe matched, hopefully only one.
-        recipe = filtered_recipes[0]
+                except ClientError as err:
+                    LOGGER.error("Could not retrieve S3 object metadata for recipe %s; %s", recipe['id'], err)
+            else:
+                empty_recipe = recipe
 
         # Recipe exists, but no link info exists, meaning it was created but
         # was not successfully uploaded and associated.
-        if recipe['link'] is None:
+        if empty_recipe:
             LOGGER.info(
-                "The %r recipe already exists. But has not been uploaded yet. "
-                "Uploading now.", name
+                "The %r recipe already exists with ID %s but has not been uploaded yet. "
+                "Uploading now.", name, empty_recipe['id']
             )
 
             # Go on, upload it
-            recipe_meta = s3_upload_recipe(name, recipe['id'], filepath)
+            recipe_meta = s3_upload_recipe(name, empty_recipe['id'], filepath)
 
             # Patch the recipe record with the link information
+            patch_data = {'link': recipe_meta['link']}
+            if template_dictionary:
+                patch_data['template_dictionary'] = template_dictionary
+
             return self._ims_recipe_patch(
-                recipe['id'], {'link': recipe_meta['link']}
+                empty_recipe['id'],
+                patch_data,
             )
 
-        LOGGER.info("The %r recipe already exists; nothing to do.", name)
-        return recipe
+        LOGGER.info("No recipe with matching name, artifacts, and template "
+                    "dictionary was found. Creating new recipe...")
+        new_recipe = self._ims_recipe_create(name, distro, template_dictionary)
+        LOGGER.info("New recipe created: %s", new_recipe)
+
+        # Go on, upload it
+        recipe_meta = s3_upload_recipe(name, new_recipe['id'], filepath)
+
+        # Patch the recipe record with the link information
+        return self._ims_recipe_patch(
+            new_recipe['id'], {'link': recipe_meta['link']}
+        )
 
     def _ims_recipes_get(self):
         """
