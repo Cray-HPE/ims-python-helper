@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Removed defunct files leftover from previous versioning system
 
+### Added
+- CASMCMS-8459 - add support for arm64 images.
+
 ## [2.12.0] - 2023-04-18
 ### Changed
 - Changed the behavior of `ImsHelper.recipe_upload()` to only skip uploading a
