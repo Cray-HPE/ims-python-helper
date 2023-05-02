@@ -336,11 +336,14 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
-    def _ims_image_create(self, name):
+    def _ims_image_create(self, name, platform=None):
         """ Create a new image record """
         url = '/'.join([self.ims_url, 'images'])
         LOGGER.info("POST %s name=%s", url, name)
-        resp = self.session.post(url, json={'name': name})
+        jsonData = {'name': name}
+        if platform != None:
+            jsonData = {'name': name, 'platform':platform}
+        resp = self.session.post(url, json=jsonData)
         resp.raise_for_status()
         return resp.json()
 
@@ -364,7 +367,8 @@ class ImsHelper(object):
     def get_empty_image_record_for_name(
             self,
             image_name: str,
-            skip_existing: bool
+            skip_existing: bool,
+            platform=None
     ) -> Dict:
         """Get an empty record for an image in IMS with the given name.
 
@@ -379,6 +383,7 @@ class ImsHelper(object):
             image_name: the desired name of the image
             skip_existing: if True, check if an image exists with the name
                 `image_name`. If it exists, check if it has a `link` attribute
+            platform: platform of the image
 
         Returns:
             dict: the empty IMS image record for the image, containing e.g.
@@ -412,11 +417,11 @@ class ImsHelper(object):
                 LOGGER.warning("Could not retrieve existing images: %s", err)
 
         LOGGER.info("Creating image with name \"%s\"", image_name)
-        return self._ims_image_create(image_name)
+        return self._ims_image_create(image_name, platform=platform)
 
     def image_upload_artifacts(
             self, image_name, ims_job_id=None, rootfs=None, kernel=None,
-            initrd=None, debug=None, boot_parameters=None, skip_existing=False,
+            initrd=None, debug=None, boot_parameters=None, skip_existing=False, platform=None
     ):
         """
         Utility function to upload and register any image artifacts with the
@@ -450,7 +455,7 @@ class ImsHelper(object):
         }
 
         try:
-            image_record = self.get_empty_image_record_for_name(image_name, skip_existing)
+            image_record = self.get_empty_image_record_for_name(image_name, skip_existing, platform=platform)
         except ImsImagesExistWithName as exc:
             for matching_image_record in exc.image_records:
                 LOGGER.info("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
@@ -466,7 +471,7 @@ class ImsHelper(object):
                                 matching_image_record["id"])
             LOGGER.info("No existing image with name \"%s\" contains matching artifacts.",
                         image_name)
-            image_record = self._ims_image_create(image_name)
+            image_record = self._ims_image_create(image_name, platform=platform)
 
         ret["ims_image_record"] = image_record
         image_id = ret["ims_image_record"]["id"]
@@ -593,7 +598,8 @@ class ImsHelper(object):
             ),
         }
 
-    def recipe_upload(self, name, filepath, distro, template_dictionary=None):
+    def recipe_upload(self, name, filepath, distro, template_dictionary=None, 
+                      platform=None, require_dkms=None):
         """
         Utility function that uploads a recipe to S3 and registers it with IMS.
         Only gzipped tar recipe archives are supported.
@@ -702,7 +708,7 @@ class ImsHelper(object):
 
         LOGGER.info("No recipe with matching name, artifacts, and template "
                     "dictionary was found. Creating new recipe...")
-        new_recipe = self._ims_recipe_create(name, distro, template_dictionary)
+        new_recipe = self._ims_recipe_create(name, distro, template_dictionary, platform=platform, require_dkms=require_dkms)
         LOGGER.info("New recipe created: %s", new_recipe)
 
         # Go on, upload it
@@ -729,7 +735,7 @@ class ImsHelper(object):
         resp.raise_for_status()
         return resp.json()
 
-    def _ims_recipe_create(self, name, linux_distribution=None, template_dictionary=None):
+    def _ims_recipe_create(self, name, linux_distribution=None, template_dictionary=None, platform=None, require_dkms=None):
         """
         Create an IMS Recipe record of a kiwi-ng recipe.
 
@@ -763,6 +769,12 @@ class ImsHelper(object):
 
         if template_dictionary:
             body['template_dictionary'] = template_dictionary
+
+        if platform:
+            body['platform'] = platform
+
+        if require_dkms:
+            body['require_dkms'] = require_dkms
 
         resp = self.session.post(url, json=body)
         resp.raise_for_status()
