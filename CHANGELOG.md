@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - CASMCMS-8459 - add support for arm64 images.
+- CASMCMS-8595 - rename platform to arch
 
 ## [2.12.0] - 2023-04-18
 ### Changed

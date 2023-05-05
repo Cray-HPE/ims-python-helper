@@ -137,8 +137,8 @@ def add_image_upload_artifacts_parser(subparsers, parent_parser):
     )
 
     parser.add_argument(
-        '--platform', type=str, choices=['aarch64', 'x86_64'], default='x86_64',
-        action='store', help='Platform for the image being uploaded'
+        '--arch', type=str, choices=['aarch64', 'x86_64'], default='x86_64',
+        action='store', help='Architecture for the image being uploaded'
     )
 
 def add_image_set_job_status(subparsers, parent_parser):
