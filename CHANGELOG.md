@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.14.0] - 2023-06-01
 ### Changed
-
+CASM-4232: Enhanced logging for [`__init__.py`](ims-python-helper/__init__.py) for use with IUF.
+ 
 ## [2.13.0] - 2023-05-02
 ### Removed
 - Removed defunct files leftover from previous versioning system
