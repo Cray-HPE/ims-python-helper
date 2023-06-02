@@ -458,11 +458,11 @@ class ImsHelper(object):
             image_record = self.get_empty_image_record_for_name(image_name, skip_existing, arch=arch)
         except ImsImagesExistWithName as exc:
             for matching_image_record in exc.image_records:
-                LOGGER.info("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
+                LOGGER.debug("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
                             "checking contents", image_name, matching_image_record['id'])
                 if self.artifacts_match_image_record(matching_image_record, image_name, rootfs, kernel,
                                                      initrd, debug, boot_parameters):
-                    LOGGER.warning("Artifacts match checksums listed in manifest for image with name \"%s\"; skipping",
+                    LOGGER.info("Artifacts match checksums listed in manifest for image with name \"%s\"; skipping",
                                    image_name)
                     ret["ims_image_record"] = matching_image_record
                     return ret
