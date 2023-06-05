@@ -323,7 +323,7 @@ class ImsHelper(object):
     def _ims_images_get(self) -> List[Dict]:
         """Get a list of images from IMS"""
         url = '/'.join([self.ims_url, 'images'])
-        LOGGER.info("GET %s", url)
+        LOGGER.debug("GET %s", url)
         resp = self.session.get(url)
         resp.raise_for_status()
         return resp.json()
@@ -331,7 +331,7 @@ class ImsHelper(object):
     def _ims_image_get(self, image_id: str) -> Dict:
         """Get a specific image from IMS"""
         url = '/'.join([self.ims_url, 'images', image_id])
-        LOGGER.info("GET %s", url)
+        LOGGER.debug("GET %s", url)
         resp = self.session.get(url)
         resp.raise_for_status()
         return resp.json()
@@ -339,7 +339,7 @@ class ImsHelper(object):
     def _ims_image_create(self, name, arch=None):
         """ Create a new image record """
         url = '/'.join([self.ims_url, 'images'])
-        LOGGER.info("POST %s name=%s", url, name)
+        LOGGER.debug("POST %s name=%s", url, name)
         jsonData = {'name': name}
         if arch != None:
             jsonData = {'name': name, 'arch':arch}
@@ -359,7 +359,7 @@ class ImsHelper(object):
     def _ims_image_delete(self, image_id):
         """ Delete IMS image record by id """
         url = '/'.join([self.ims_url, 'images', image_id])
-        LOGGER.info("DELETE %s", url)
+        LOGGER.debug("DELETE %s", url)
         resp = self.session.delete(url)
         resp.raise_for_status()
         return resp
@@ -458,18 +458,18 @@ class ImsHelper(object):
             image_record = self.get_empty_image_record_for_name(image_name, skip_existing, arch=arch)
         except ImsImagesExistWithName as exc:
             for matching_image_record in exc.image_records:
-                LOGGER.info("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
-                            "checking contents.", image_name, matching_image_record['id'])
+                LOGGER.debug("Image with name \"%s\" already exists in IMS with ID \"%s\"; "
+                            "checking contents", image_name, matching_image_record['id'])
                 if self.artifacts_match_image_record(matching_image_record, image_name, rootfs, kernel,
                                                      initrd, debug, boot_parameters):
-                    LOGGER.warning("Artifacts match checksums listed in manifest for image with name \"%s\"; skipping.",
+                    LOGGER.info("Artifacts match checksums listed in manifest for image with name \"%s\"; skipping",
                                    image_name)
                     ret["ims_image_record"] = matching_image_record
                     return ret
                 else:
                     LOGGER.info("Artifacts in existing image with ID \"%s\" do not match; checking other images",
                                 matching_image_record["id"])
-            LOGGER.info("No existing image with name \"%s\" contains matching artifacts.",
+            LOGGER.info("No existing image with name \"%s\" contains matching artifacts",
                         image_name)
             image_record = self._ims_image_create(image_name, arch=arch)
 
@@ -491,7 +491,7 @@ class ImsHelper(object):
             to_upload.append((BOOT_PARAMS_ARTIFACT_TYPE, key % 'boot_parameters',
                               boot_parameters))  # noqa: E501
         if not to_upload:
-            LOGGER.info("No image artifacts supplied for image %s; not uploading anything.", image_name)
+            LOGGER.info("No image artifacts supplied for image %s; not uploading anything", image_name)
             return ret
 
         # Upload the files in series
@@ -506,7 +506,7 @@ class ImsHelper(object):
                     ims_job_id=ims_job_id
                 ))
             except ClientError as err:
-                LOGGER.error("Failed upload of artifact=%s.", upload[1])
+                LOGGER.error("Failed upload of artifact=%s", upload[1])
                 LOGGER.info(
                     "Removing image_id=%s; image_name=%s", image_id, image_name
                 )
@@ -651,12 +651,12 @@ class ImsHelper(object):
                     raise err
 
         if template_dictionary:
-            LOGGER.info(
+            LOGGER.debug(
                 "Starting recipe_upload; name=%s, file=%s, distro=%s, template_dictionary=%s",
                 name, filepath, distro, template_dictionary
             )
         else:
-            LOGGER.info(
+            LOGGER.debug(
                 "Starting recipe_upload; name=%s, file=%s, distro=%s",
                 name, filepath, distro
             )
@@ -676,7 +676,7 @@ class ImsHelper(object):
                     if recipe_obj.metadata.get('md5sum') == self._md5(filepath) \
                             and template_dictionary == recipe_template_dict:
                         LOGGER.info('Recipe "%s" has already been uploaded (IMS recipe with ID "%s" and template '
-                                    'dictionary %r already exists); nothing to do.',
+                                    'dictionary %r already exists); nothing to do',
                                     name, recipe['id'], template_dictionary)
                         return recipe
 
@@ -690,7 +690,7 @@ class ImsHelper(object):
         if empty_recipe:
             LOGGER.info(
                 "The %r recipe already exists with ID %s but has not been uploaded yet. "
-                "Uploading now.", name, empty_recipe['id']
+                "Uploading now", name, empty_recipe['id']
             )
 
             # Go on, upload it
@@ -730,7 +730,7 @@ class ImsHelper(object):
             requests.exceptions.HTTPError
         """
         url = '/'.join([self.ims_url, 'recipes'])
-        LOGGER.info("GET %s", url)
+        LOGGER.debug("GET %s", url)
         resp = self.session.get(url)
         resp.raise_for_status()
         return resp.json()
@@ -751,12 +751,12 @@ class ImsHelper(object):
 
         if template_dictionary:
             template_dictionary = [{'key': k, 'value': v} for k, v in template_dictionary.items()]
-            LOGGER.info(
+            LOGGER.debug(
                 "POST %s name=%s, linux_distribution=%s, template_dictionary=%s",
                 name, url, linux_distribution, template_dictionary
             )
         else:
-            LOGGER.info(
+            LOGGER.debug(
                 "POST %s name=%s, linux_distribution=%s",
                 name, url, linux_distribution
             )
@@ -800,7 +800,7 @@ class ImsHelper(object):
             requests.exceptions.HTTPError
         """
         url = '/'.join([self.ims_url, 'recipes', ident])
-        LOGGER.info("DELETE %s", url)
+        LOGGER.debug("DELETE %s", url)
         resp = self.session.delete(url)
         resp.raise_for_status()
         return resp
