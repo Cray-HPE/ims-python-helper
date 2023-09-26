@@ -54,6 +54,8 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning  # noqa:
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error  # noqa: E402
 from enum import Enum
 from ims_python_helper import ImsHelper, DEFAULT_IMS_API_URL  # noqa: E402
+from ims_python_helper.session import create_oauth_session
+
 # pylint: enable=wrong-import-position
 
 UUID_PATTERN = \
@@ -305,63 +307,6 @@ def log_response(resp, *_args, **_kwargs):  # pylint: disable=unused-argument
                      resp.content)
 
 
-def create_session(oauth_client_id, oauth_client_secret, ssl_cert, token_url, timeout):  # noqa: E501
-    """
-    Create a session for this client when connecting with Shasta services
-    """
-    if not all([oauth_client_id, oauth_client_secret, token_url]):
-        raise ValueError(
-            'Invalid oauth configuration. Please check that the oauth_client_id, '  # noqa: E501
-            'oauth_client_secret and token_url parameters are being specified and '  # noqa: E501
-            'are correct. Determine the specific information that '
-            'is missing or invalid and then re-run the request with valid'
-        )
-
-    oauth_client = oauthlib.oauth2.BackendApplicationClient(
-        client_id=oauth_client_id)
-
-    session = requests_oauthlib.OAuth2Session(
-        client=oauth_client, auto_refresh_url=token_url,
-        auto_refresh_kwargs={
-            'client_id': oauth_client_id,
-            'client_secret': oauth_client_secret,
-        },
-        token_updater=lambda t: None)
-
-    session.verify = ssl_cert
-    session.timeout = timeout
-
-    session.hooks['response'].append(log_request)
-    session.hooks['response'].append(log_response)
-
-    token = None
-    attempt_timeout = 0
-    sleep_ceiling = 64
-    while True:
-        try:
-            token = session.fetch_token(
-                token_url=token_url, client_id=oauth_client_id,
-                client_secret=oauth_client_secret, timeout=500)
-        except OAuth2Error as oa2e:
-            # In practice, this can fail for a very large number of reasons
-            # from the underlying oauth lib. Rather than special casing each
-            # and every one, we simply verify that a token was successfully
-            # generated and then log the raising exception. We otherwise do not
-            # want to get into the business of special casing the kinds of
-            # failures that the oauthlib2 library can raise.
-            LOGGER.warning(oa2e)
-        if not token:
-            time.sleep(attempt_timeout)
-            if attempt_timeout != sleep_ceiling:
-                attempt_timeout += 1
-            LOGGER.info(
-                "Unable to obtain token from auth service, retrying in %s seconds", attempt_timeout
-            )
-        else:
-            break
-    return session
-
-
 def main(program_name, args):
     """ Main function """
 
@@ -376,7 +321,7 @@ def main(program_name, args):
         's3_access_key': args.s3_access_key,
         's3_ssl_verify': args.s3_ssl_verify,
         's3_bucket': args.s3_bucket,
-        'session': create_session(
+        'session': create_oauth_session(
             args.oauth_client_id, args.oauth_client_secret, args.cert,
             args.token_url, args.timeout
         ),
