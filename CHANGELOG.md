@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [2.15.0] - 2023-09-26
+### Added
+- CASMCMS-8739 - move common functions here from ims-utils.
+### Changed
+- Disabled concurrent Jenkins builds on same branch/commit
+- Added build timeout to avoid hung builds
+
+### Dependencies
+Bumped dependency patch versions:
+| Package                  | From     | To       |
+|--------------------------|----------|----------|
+| `boto3`                  | 1.17.46  | 1.17.53  |
+| `botocore`               | 1.20.46  | 1.20.53  |
+| `oauthlib`               | 3.1.0    | 3.1.1    |
+| `python-dateutil`        | 2.8.1    | 2.8.2    |
+| `requests-oauthlib`      | 1.3.0    | 1.3.1    |
+| `s3transfer`             | 0.3.6    | 0.3.7    |
+| `urllib3`                | 1.26.2   | 1.26.16  |
+
 ## [2.14.0] - 2023-06-01
 ### Changed
 CASM-4232: Enhanced logging for [`__init__.py`](ims-python-helper/__init__.py) for use with IUF.
