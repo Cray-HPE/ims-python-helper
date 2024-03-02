@@ -289,7 +289,7 @@ class FetchImage(FetchBase):
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
             sys.exit(1)
 
-    def run(self):
+    def run(self, unpack: bool = True):
         try:
             LOGGER.info("Setting job status to 'fetching_image'.")
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "fetching_image")
@@ -299,14 +299,17 @@ class FetchImage(FetchBase):
             self.download_file(self.url, self.image_sqshfs)
             LOGGER.info("Deleting signal files")
             self.delete_signal_files()
-            LOGGER.info("Uncompressing image into %s", self.path)
-            self.unsquash_image()
+            if unpack:
+                LOGGER.info("Uncompressing image into %s", self.path)
+                self.unsquash_image()
+            else:
+                LOGGER.info("Skipping image unsquash")
         except Exception as exc:
             LOGGER.error("Error unhandled exception while fetching image root.", exc_info=exc)
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
             sys.exit(1)
         finally:
-            if os.path.isfile(self.image_sqshfs):
+            if os.path.isfile(self.image_sqshfs) and unpack:
                 LOGGER.info("Deleting compressed image %s", self.image_sqshfs)
                 os.remove(self.image_sqshfs)
             LOGGER.info("Done")

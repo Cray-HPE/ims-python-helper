@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [3.0.0] - 2024-03-02
+### Added
+- CASMCMS-8821 - add argument to disable unsquashing downloaded image file.
+
 ## [2.15.0] - 2023-09-26
 ### Added
 - CASMCMS-8739 - move common functions here from ims-utils.
