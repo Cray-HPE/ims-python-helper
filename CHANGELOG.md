@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Dependencies
+Bumped dependency patch versions:
+| Package             | From     | To       |
+|---------------------|----------|----------|
+| `boto3`             | 1.17.53  | 1.34.114 |
+| `botocore`          | 1.20.53  | 1.34.114 |
+| `chardet`           | 4.0.0    | 5.2.0    |
+| `idna`              | 3.1      | 3.7      |
+| `jmespath`          | 0.10.0   | 1.0.1    |
+| `oauthlib`          | 3.1.1    | 3.2.2    |
+| `requests`          | 2.26.0   | 2.31.0   |
+| `s3transfer`        | 0.3.7    | 0.10.1   |
+| `six`               | 1.15.0   | 1.16.0   |
+| `urllib3`           | 1.26.16  | 1.26.18  |
+
 ## [3.0.0] - 2024-03-02
 ### Added
 - CASMCMS-8821 - add argument to disable unsquashing downloaded image file.
