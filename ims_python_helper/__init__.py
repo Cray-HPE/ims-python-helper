@@ -35,7 +35,7 @@ from time import sleep
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
-from pkg_resources import get_distribution
+from importlib.metadata import version
 
 # CASMCMS-4926: Adjust import path while using this library to find
 # provided, version pinned libraries outside of the context of the Base OS
@@ -88,11 +88,11 @@ class ImsHelper(object):
             self, ims_url=DEFAULT_IMS_API_URL, session=None, s3_access_key=None,  # pylint: disable=unused-argument
             s3_secret_key=None, s3_endpoint=None, s3_bucket=None, s3_ssl_verify=None, **_kwargs
     ):
-        version = get_distribution('ims-python-helper').version
+        module_version = version('ims-python-helper')
         self.ims_url = ims_url.lstrip('/')
         self.session = session or requests.session()
         self.session.headers.update(
-            {'User-Agent': 'ims-python-helper/%s' % version}
+            {'User-Agent': 'ims-python-helper/%s' % module_version}
         )
 
         # Creates a URL retry object and HTTP adapter to use with our session.
