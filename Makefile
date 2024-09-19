@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2021-2022 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2021-2022, 2024 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -35,8 +35,8 @@ lint:
 		./cms_meta_tools/scripts/runLint.sh
 
 prepare:
-		pip3 install --upgrade pip setuptools
-		pip3 install wheel
+		pip3 install --upgrade --user pip setuptools
+		pip3 install --user wheel
 
 		rm -rf dist
 		mkdir -p $(BUILD_DIR)/SPECS $(BUILD_DIR)/SOURCES
@@ -45,8 +45,8 @@ python_wheel:
 		python3 setup.py sdist bdist_wheel
 
 unit_test:
-		pip3 install -r requirements.txt
-		pip3 install -r requirements-test.txt
+		pip3 install --user -r requirements.txt
+		pip3 install --user -r requirements-test.txt
 		python3 tests/test_images.py
 		pycodestyle --config=.pycodestyle ./ims_python_helper || true
 		pylint ./ims_python_helper || true
