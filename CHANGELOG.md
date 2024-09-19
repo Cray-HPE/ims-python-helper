@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [3.1.1] - 2024-09-19
+
+### Changed
+- CASMCMS-9142: Install Python modules with `--user` to avoid build failures, and build inside Docker container.
+
 ## [3.1.0] - 2024-06-10
 ### Dependencies
 Bumped dependency patch versions:
