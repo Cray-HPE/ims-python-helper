@@ -2,7 +2,7 @@
  *
  *  MIT License
  *
- *  (C) Copyright 2021-2023 Hewlett Packard Enterprise Development LP
+ *  (C) Copyright 2021-2024 Hewlett Packard Enterprise Development LP
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a
  *  copy of this software and associated documentation files (the "Software"),
@@ -25,6 +25,8 @@
  */
 @Library('cms-meta-tools') _
 @Library('csm-shared-library') __
+
+def pyImage = 'artifactory.algol60.net/csm-docker/stable/csm-docker-sle-python'
 
 pipeline {
     agent {
@@ -72,20 +74,17 @@ pipeline {
             }
         }
 
-        stage("Install necessary tools") {
+        stage("Build Python Module") {
+            agent {
+                docker {
+                    args "-v /home/jenkins/.ssh:/home/jenkins/.ssh -v /home/jenkins/.netrc:/home/jenkins/.netrc"
+                    reuseNode true
+                    image "${pyImage}:3.11"
+                }
+            }
             steps {
                 sh "make prepare"
-            }
-        }
-
-        stage("Build Python Module") {
-            steps {
                 sh "make python_wheel"
-            }
-        }
-
-        stage('Unit Tests') {
-            steps {
                 sh "make unit_test"
             }
         }
