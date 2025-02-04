@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2018-2023 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2018-2023, 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -46,6 +46,8 @@ sys.path.insert(0, '/opt/cray/crayctl/lib/python2.7/site-packages')
 
 # pylint: disable=wrong-import-position
 import boto3  # noqa: E402
+from botocore.config import Config
+from boto3.s3.transfer import TransferConfig
 import requests  # noqa: E402
 from botocore.exceptions import ClientError  # noqa: E402
 from requests.adapters import HTTPAdapter  # noqa: E402
@@ -62,6 +64,25 @@ KERNEL_ARTIFACT_TYPE = 'application/vnd.cray.image.kernel'
 SQUASHFS_ARTIFACT_TYPE = 'application/vnd.cray.image.rootfs.squashfs'
 DEBUG_KERNEL_ARTIFACT_TYPE = 'application/vnd.cray.image.debug.kernel'
 BOOT_PARAMS_ARTIFACT_TYPE = 'application/vnd.cray.image.parameters.boot'
+
+# Set up transfer configuration for large file downloads
+boto3_transfer_config = TransferConfig(
+    multipart_threshold=8 * 1024 * 1024,  # Files above 8MB will be multipart
+    max_concurrency=20,  # Maximum number of threads to use for parallel downloads
+    multipart_chunksize=8 * 1024 * 1024,  # Each part of the file is 8MB
+    use_threads=True  # Enable multi-threading for downloads
+)
+
+# Define boto3 retry settings
+boto3_retry_config = Config(
+    retries={
+        'max_attempts': 20,  # Number of retries
+        'mode': 'standard',  # Retry mode, 'standard' is most common
+    },
+    connect_timeout = 10,    # Connection timeout in seconds
+    read_timeout = 20,       # Read timeout in seconds
+    max_pool_connections=20  # Maximum number of connections in the pool
+)
 
 
 class ImsImagesExistWithName(Exception):
@@ -88,6 +109,7 @@ class ImsHelper(object):
             self, ims_url=DEFAULT_IMS_API_URL, session=None, s3_access_key=None,  # pylint: disable=unused-argument
             s3_secret_key=None, s3_endpoint=None, s3_bucket=None, s3_ssl_verify=None, **_kwargs
     ):
+        LOGGER.info("S3 End Point %s", s3_endpoint)
         module_version = version('ims-python-helper')
         self.ims_url = ims_url.lstrip('/')
         self.session = session or requests.session()
@@ -103,7 +125,8 @@ class ImsHelper(object):
 
         # Setup the connection to S3
         self.s3_bucket = s3_bucket
-        s3args = ('s3',)
+        LOGGER.info("S3 Bucket=%s", self.s3_bucket)
+        s3args = ('s3', )
         s3kwargs = {
             'endpoint_url': s3_endpoint,
             'aws_access_key_id': s3_access_key,
@@ -111,7 +134,7 @@ class ImsHelper(object):
             'verify': False if not s3_ssl_verify or s3_ssl_verify.lower() in ('false', 'off', 'no', 'f', '0') else s3_ssl_verify  # noqa: E402
         }
 
-        self.s3_client = boto3.client(*s3args, **s3kwargs)
+        self.s3_client = boto3.client(service_name='s3', config=boto3_retry_config, **s3kwargs)
         self.s3_resource = boto3.resource(*s3args, **s3kwargs)
 
     @staticmethod

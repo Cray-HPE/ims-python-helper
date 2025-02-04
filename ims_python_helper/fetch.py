@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2023 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2023, 2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,6 @@
 #
 
 import logging
-from multiprocessing.connection import wait
 import os
 import shutil
 import subprocess
@@ -31,12 +30,17 @@ import sys
 import tarfile
 import tempfile
 import time
+import re
 
 import jinja2
 import oauthlib.oauth2
 import requests
 import requests_oauthlib
 import yaml
+from boto3.s3.transfer import S3Transfer
+
+from ims_python_helper import boto3_transfer_config
+
 from ims_python_helper import ImsHelper
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
@@ -50,7 +54,7 @@ CA_CERT = os.environ.get("CA_CERT", "")
 
 class FetchBase(object):
 
-    def __init__(self):
+    def __init__(self, s3_bucket):
         try:
             self.IMS_JOB_ID = os.environ["IMS_JOB_ID"]
             LOGGER.info("IMS_JOB_ID=%s", self.IMS_JOB_ID)
@@ -64,10 +68,10 @@ class FetchBase(object):
         self.ims_helper = ImsHelper(
             ims_url=IMS_URL,
             session=self.oauth_session,
-            s3_host=os.environ.get('S3_HOST', None),
+            s3_endpoint=os.environ.get('S3_ENDPOINT', None),
             s3_secret_key=os.environ.get('S3_SECRET_KEY', None),
             s3_access_key=os.environ.get('S3_ACCESS_KEY', None),
-            s3_bucket=os.environ.get('S3_BUCKET', None)
+            s3_bucket=s3_bucket
         )
 
     @staticmethod
@@ -202,56 +206,67 @@ class FetchBase(object):
 
         return session
 
-    def download_file(self, download_url, filename):
+    def verify_md5_sum(self, downloaded_file: str):
         """
-        Download file using python requests session.
+        Verify the md5sum of the downloaded file.
+        """
+        if actual_md5sum := os.environ.get("DOWNLOAD_MD5SUM", ""):
+            LOGGER.info("Verifying md5sum of the downloaded file.")
+            if actual_md5sum != ImsHelper._md5(downloaded_file):
+                LOGGER.error("The calculated md5sum does not match the expected value.")
+                LOGGER.info("Actual md5sum: %s", actual_md5sum)
+                LOGGER.info("Calculated md5sum: %s", ImsHelper._md5(downloaded_file))
+                LOGGER.info("Downloaded file size: %s", os.path.getsize(downloaded_file))
+                self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
+                sys.exit(1)
+            LOGGER.info("Successfully verified the md5sum of the downloaded file.")
+        else:
+            LOGGER.error("MD5SUM environment variable is not set.")
+            self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
+            sys.exit(1)
+
+
+    def download_file(self, filename: str, s3_key: str):
+        """
+        Download file using boto3
         Args:
-            download_url : URL of the file to be downloaded
+            s3_key : The key of the object to download
             filename : The filename where the file is to be stored
         """
 
-        # insure the parent dirs exist
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        #  if the filename does not have a parent directory,
+        #  os.path.dirname(filename) will return an empty string, causing os.makedirs to raise an error.
+        if not s3_key:
+            LOGGER.error("S3_KEY environment variable is not set.")
+            self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
+            sys.exit(1)
+        LOGGER.info("S3 object key %s", s3_key)
+        if directory := os.path.dirname(filename):
+            os.makedirs(directory, exist_ok=True)
 
-        # allow multiple failures while tring to download file
-        LOGGER.info("Saving file as '%s'", filename)
-        numAttempts=0
-        sleepTime=10
-        maxAttempts=20
-        while numAttempts<maxAttempts:
-            try:
-                response = self.insecure_session.get(download_url, stream=True, allow_redirects=True)
-                response.raise_for_status()
-                if response.ok:
-                    with open(filename, 'wb') as fout:
-                        for chunk in response.iter_content(chunk_size=1024*1024):
-                            if chunk:
-                                fout.write(chunk)
-                LOGGER.info("File download complete.")
-                break
-            except RequestException as err:
-                # catch the exception so we can try again
-                LOGGER.warning(f"Error {err} downloading {download_url}")
+        if not (bucket_name := self.ims_helper.s3_bucket):
+            LOGGER.error("S3_BUCKET environment variable is not set.")
+            self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
+            sys.exit(1)
 
-            numAttempts += 1
-            LOGGER.warning(f"Sleeping {sleepTime} sec and trying again...")
-            time.sleep(sleepTime)
-
-        # if we have hit number of attempts without succeeding bail
-        if numAttempts >= maxAttempts:
-            LOGGER.error(f"Failed to download {download_url} after {numAttempts} tries.")
+        # with open(filename, 'wb') as fout:
+        #     self.ims_helper.s3_client.download_fileobj(bucket_name, s3_key, fout)
+        try:
+            # self.ims_helper.s3_client.download_file(bucket_name,
+            #                                         s3_key,
+            #                                         filename,
+            #                                         Config=boto3_transfer_config)
+            transfer = S3Transfer(self.ims_helper.s3_client)
+            transfer.download_file(bucket_name, s3_key, filename)
+            LOGGER.info("File downloaded to %s", filename)
+        except Exception as exc:
+            LOGGER.error("Error downloading file from S3.", exc_info=exc)
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
             sys.exit(1)
 
         # verify the md5 sum of the downloaded file
-        download_md5sum = os.environ.get("DOWNLOAD_MD5SUM", "")
-        if download_md5sum:
-            LOGGER.info("Verifying md5sum of the downloaded file.")
-            if download_md5sum != ImsHelper._md5(filename):
-                LOGGER.error("The calculated md5sum does not match the expected value.")
-                self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
-                sys.exit(1)
-            LOGGER.info("Successfully verified the md5sum of the downloaded file.")
+        self.verify_md5_sum(downloaded_file=filename)
+
 
     def run(self):
         pass
@@ -259,11 +274,11 @@ class FetchBase(object):
 
 class FetchImage(FetchBase):
 
-    def __init__(self, path, url):
-        super(FetchImage, self).__init__()
+    def __init__(self, path, s3_key):
+        super(FetchImage, self).__init__(s3_bucket=os.environ.get('S3_BUCKET', None))
 
         self.path = path
-        self.url = url
+        self.s3_key = s3_key
         self.image_sqshfs = os.path.join(self.path, "image.sqsh")
 
     def delete_signal_files(self):
@@ -295,8 +310,7 @@ class FetchImage(FetchBase):
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "fetching_image")
             if not os.path.exists(self.path):
                 os.makedirs(self.path)
-            LOGGER.info("Fetching image %s", self.url)
-            self.download_file(self.url, self.image_sqshfs)
+            self.download_file(filename=self.image_sqshfs, s3_key=self.s3_key)
             LOGGER.info("Deleting signal files")
             self.delete_signal_files()
             if unpack:
@@ -317,11 +331,11 @@ class FetchImage(FetchBase):
 
 class FetchRecipe(FetchBase):
 
-    def __init__(self, path, url):
-        super(FetchRecipe, self).__init__()
+    def __init__(self, path, s3_key):
+        super(FetchRecipe, self).__init__(s3_bucket=os.environ.get('S3_BUCKET_IMS', None))
 
         self.path = path
-        self.url = url
+        self.s3_key = s3_key
         self.recipe_tgz = os.path.join(self.path, "recipe.tgz")
 
     def untar_recipe(self):
@@ -407,9 +421,8 @@ class FetchRecipe(FetchBase):
         try:
             LOGGER.info("Setting job status to 'fetching_recipe'.")
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "fetching_recipe")
-            LOGGER.info("Fetching recipe %s", self.url)
-            self.download_file(self.url, self.recipe_tgz)
-            LOGGER.info("Uncompressing recipe into %s", self.path)
+            self.download_file(filename=self.recipe_tgz, s3_key=self.s3_key)
+            LOGGER.info("Decompressing recipe into %s", self.path)
             self.untar_recipe()
             LOGGER.info("Templating recipe")
             self.template_recipe()
