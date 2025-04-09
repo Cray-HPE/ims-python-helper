@@ -252,12 +252,12 @@ class FetchBase(object):
         # with open(filename, 'wb') as fout:
         #     self.ims_helper.s3_client.download_fileobj(bucket_name, s3_key, fout)
         try:
-            # self.ims_helper.s3_client.download_file(bucket_name,
-            #                                         s3_key,
-            #                                         filename,
-            #                                         Config=boto3_transfer_config)
-            transfer = S3Transfer(self.ims_helper.s3_client)
-            transfer.download_file(bucket_name, s3_key, filename)
+            self.ims_helper.s3_client.download_file(bucket_name,
+                                                    s3_key,
+                                                    filename,
+                                                    Config=boto3_transfer_config)
+            # transfer = S3Transfer(self.ims_helper.s3_client)
+            # transfer.download_file(bucket_name, s3_key, filename)
             LOGGER.info("File downloaded to %s", filename)
         except Exception as exc:
             LOGGER.error("Error downloading file from S3.", exc_info=exc)

@@ -67,10 +67,11 @@ BOOT_PARAMS_ARTIFACT_TYPE = 'application/vnd.cray.image.parameters.boot'
 
 # Set up transfer configuration for large file downloads
 boto3_transfer_config = TransferConfig(
-    multipart_threshold=8 * 1024 * 1024,  # Files above 8MB will be multipart
+    multipart_threshold=30 * 1024 * 1024,  # Files above 8MB will be multipart
     max_concurrency=20,  # Maximum number of threads to use for parallel downloads
-    multipart_chunksize=8 * 1024 * 1024,  # Each part of the file is 8MB
-    use_threads=True  # Enable multi-threading for downloads
+    multipart_chunksize=20 * 1024 * 1024,  # Each part of the file is 20MB
+    use_threads=True,  # Enable multi-threading for downloads
+    num_download_attempts=20,  # Number of attempts to download a file
 )
 
 # Define boto3 retry settings
