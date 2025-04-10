@@ -32,6 +32,7 @@ import tempfile
 import time
 import re
 
+import boto3
 import jinja2
 import oauthlib.oauth2
 import requests
@@ -74,6 +75,10 @@ class FetchBase(object):
             s3_secret_key=os.environ.get('S3_SECRET_KEY', None),
             s3_access_key=os.environ.get('S3_ACCESS_KEY', None),
             s3_bucket=s3_bucket
+        )
+        self.session = boto3.Session(
+            aws_access_key_id=os.environ.get('S3_ACCESS_KEY', None),
+            aws_secret_access_key=os.environ.get('S3_SECRET_KEY', None)
         )
 
     @staticmethod
@@ -258,7 +263,7 @@ class FetchBase(object):
             #                                         s3_key,
             #                                         filename,
             #                                         Config=boto3_transfer_config)
-            with open(f"{self.s3_endpoint}/{bucket_name}/{s3_key}", 'rb') as s3_file:
+            with open(f"{self.s3_endpoint}/{bucket_name}/{s3_key}", 'rb', transport_params={'session': self.session}) as s3_file:
                 with open(filename, 'wb') as local_file:
                     shutil.copyfileobj(s3_file, local_file)
             # transfer = S3Transfer(self.ims_helper.s3_client)
