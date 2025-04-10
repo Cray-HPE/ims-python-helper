@@ -42,7 +42,8 @@ from boto3.s3.transfer import S3Transfer
 from smart_open import open
 
 from ims_python_helper import boto3_transfer_config
-from s3_parallel_download import S3ParallelDownload
+
+from ims_python_helper.s3_parallel_download import S3ParallelDownload
 
 from ims_python_helper import ImsHelper
 from requests.adapters import HTTPAdapter
