@@ -42,6 +42,7 @@ from boto3.s3.transfer import S3Transfer
 from smart_open import open
 
 from ims_python_helper import boto3_transfer_config
+from s3_parallel_download import S3ParallelDownload
 
 from ims_python_helper import ImsHelper
 from requests.adapters import HTTPAdapter
@@ -253,11 +254,14 @@ class FetchBase(object):
             sys.exit(1)
 
         try:
-            self.ims_helper.s3_client.download_file(bucket_name,
-                                                    s3_key,
-                                                    filename,
-                                                    Config=boto3_transfer_config)
-
+            # self.ims_helper.s3_client.download_file(bucket_name,
+            #                                         s3_key,
+            #                                         filename,
+            #                                         Config=boto3_transfer_config)
+            S3ParallelDownload(bucket_name=bucket_name,
+                               s3_key=s3_key,
+                               local_path=filename,
+                               s3_client=self.ims_helper.s3_client).download_file()
             # transfer = S3Transfer(self.ims_helper.s3_client)
             # transfer.download_file(bucket_name, s3_key, filename)
             LOGGER.info("File downloaded to %s", filename)
