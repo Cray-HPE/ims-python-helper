@@ -263,7 +263,7 @@ class FetchBase(object):
                     shutil.copyfileobj(s3_file, local_file)
             # transfer = S3Transfer(self.ims_helper.s3_client)
             # transfer.download_file(bucket_name, s3_key, filename)
-            LOGGER.info("File downloaded to %s", filename)
+            LOGGER.info("File downloaded using smart_open to %s", filename)
         except Exception as exc:
             LOGGER.error("Error downloading file from S3.", exc_info=exc)
             self.ims_helper.image_set_job_status(self.IMS_JOB_ID, "error")
