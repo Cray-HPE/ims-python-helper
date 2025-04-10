@@ -38,6 +38,7 @@ import requests
 import requests_oauthlib
 import yaml
 from boto3.s3.transfer import S3Transfer
+from smart_open import open
 
 from ims_python_helper import boto3_transfer_config
 
@@ -65,10 +66,11 @@ class FetchBase(object):
         self.oauth_session = FetchBase.create_oauth_session()
         # Remove insecure session once CASMCMS-4521 (Update IMS to talk via HTTPS to ceph rados gateway) is unblocked
         self.insecure_session = FetchBase.create_session()
+        self.s3_endpoint = os.environ.get('S3_ENDPOINT', None)
         self.ims_helper = ImsHelper(
             ims_url=IMS_URL,
             session=self.oauth_session,
-            s3_endpoint=os.environ.get('S3_ENDPOINT', None),
+            s3_endpoint=self.s3_endpoint,
             s3_secret_key=os.environ.get('S3_SECRET_KEY', None),
             s3_access_key=os.environ.get('S3_ACCESS_KEY', None),
             s3_bucket=s3_bucket
@@ -252,10 +254,13 @@ class FetchBase(object):
         # with open(filename, 'wb') as fout:
         #     self.ims_helper.s3_client.download_fileobj(bucket_name, s3_key, fout)
         try:
-            self.ims_helper.s3_client.download_file(bucket_name,
-                                                    s3_key,
-                                                    filename,
-                                                    Config=boto3_transfer_config)
+            # self.ims_helper.s3_client.download_file(bucket_name,
+            #                                         s3_key,
+            #                                         filename,
+            #                                         Config=boto3_transfer_config)
+            with open(f"{self.s3_endpoint}/{bucket_name}/{s3_key}", 'rb') as s3_file:
+                with open(filename, 'wb') as local_file:
+                    shutil.copyfileobj(s3_file, local_file)
             # transfer = S3Transfer(self.ims_helper.s3_client)
             # transfer.download_file(bucket_name, s3_key, filename)
             LOGGER.info("File downloaded to %s", filename)
