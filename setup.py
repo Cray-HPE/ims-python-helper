@@ -41,6 +41,7 @@ setuptools.setup(
       'oauthlib',
       'requests',
       'requests-oauthlib',
+      'smart_open',
     ],
     author="Cray Inc.",
     author_email="sps@cray.com",
