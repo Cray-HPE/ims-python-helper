@@ -42,6 +42,7 @@ setuptools.setup(
       'requests',
       'requests-oauthlib',
       'smart_open',
+      'gevent',
     ],
     author="Cray Inc.",
     author_email="sps@cray.com",
