@@ -40,6 +40,7 @@ class S3ParallelDownload:
 
     def get_key(self):
         bucket = self.get_bucket_obj()
+        print(f"Getting key {self.s3_key} from bucket {self.bucket_name}")
         key_object = bucket.get_key(self.s3_key)
         if key_object is None:
             raise ValueError(f"Key {self.s3_key} not found in bucket {self.bucket_name}")
@@ -60,9 +61,14 @@ class S3ParallelDownload:
 
     def download_file(self):
         file_size = self.get_key().size - 1
+        print(f"File size: {file_size}")
         if file_size < self.chunk_size:
             self.download_small_file()
         else:
+            print(f"Downloading {self.s3_key} in chunks of {self.chunk_size} bytes")
+             # Create a list of chunk ranges
+             # Use gevent to download each chunk in parallel
+             # Use a generator to yield the chunks
             chunk_list = range(0, file_size, self.chunk_size)
             gevent.joinall([
                 gevent.spawn(self.download_file_in_parts, chunk, file_size)
