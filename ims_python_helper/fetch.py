@@ -262,7 +262,8 @@ class FetchBase(object):
             S3ParallelDownload(bucket_name=bucket_name,
                                s3_key=s3_key,
                                local_path=filename,
-                               s3_client=self.ims_helper.s3_client).download_file()
+                               s3_client=self.ims_helper.s3_client,
+                               s3_resource=self.ims_helper.s3_resource).download_file()
             # transfer = S3Transfer(self.ims_helper.s3_client)
             # transfer.download_file(bucket_name, s3_key, filename)
             LOGGER.info("File downloaded to %s", filename)

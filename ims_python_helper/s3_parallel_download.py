@@ -27,18 +27,19 @@ import gevent
 _DEFAULT_CHUNK_SIZE_B = 20 * 1024 * 1024
 
 class S3ParallelDownload:
-    def __init__(self, bucket_name, s3_key, local_path, s3_client=None):
+    def __init__(self, bucket_name, s3_key, local_path, s3_client=None, s3_resource=None):
         self.bucket_name = bucket_name
         self.s3_key = s3_key
         self.s3_client = s3_client
         self.chunk_size = _DEFAULT_CHUNK_SIZE_B
         self.local_path = local_path
+        self.s3_resource = s3_resource
 
-    def get_bucket(self):
-        return self.s3_client.Bucket(self.bucket_name)
+    def get_bucket_obj(self):
+        return self.s3_resource.Bucket(self.bucket_name)
 
     def get_key(self):
-        bucket = self.get_bucket()
+        bucket = self.get_bucket_obj()
         key_object = bucket.get_key(self.s3_key)
         if key_object is None:
             raise ValueError(f"Key {self.s3_key} not found in bucket {self.bucket_name}")
