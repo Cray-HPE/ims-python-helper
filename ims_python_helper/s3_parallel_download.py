@@ -23,7 +23,6 @@
 #
 
 import gevent
-from gevent import monkey; monkey.patch_all()
 from gevent.pool import Pool
 import logging
 import os
@@ -32,7 +31,7 @@ LOGGER = logging.getLogger(__file__)
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 DEFAULT_CHUNK_SIZE_BYTES = 10 * 1024 * 1024
-NO_OF_GREENLETS = 10
+NO_OF_GREENLETS = 5
 
 class S3ParallelDownload:
     def __init__(self, bucket_name, s3_key, local_path, s3_client=None, s3_resource=None):
