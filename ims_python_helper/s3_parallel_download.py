@@ -23,6 +23,11 @@
 #
 
 import gevent
+import logging
+import os
+
+LOGGER = logging.getLogger(__file__)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 _DEFAULT_CHUNK_SIZE_B = 20 * 1024 * 1024
 
@@ -36,15 +41,20 @@ class S3ParallelDownload:
         self.s3_resource = s3_resource
 
     def get_bucket_obj(self):
-        return self.s3_resource.Bucket(self.bucket_name)
+        return self.s3_client.head_object(Bucket=self.bucket_name, Key=self.s3_key)
 
     def get_key(self):
         bucket = self.get_bucket_obj()
-        print(f"Getting key {self.s3_key} from bucket {self.bucket_name}")
+        LOGGER.info(f"Getting key %s from bucket %s", self.s3_key, self.bucket_name)
         key_object = bucket.get_key(self.s3_key)
         if key_object is None:
             raise ValueError(f"Key {self.s3_key} not found in bucket {self.bucket_name}")
         return key_object
+
+    def get_file_size(self):
+        response = self.s3_client.head_object(Bucket=self.bucket_name, Key=self.s3_key)
+        LOGGER.info("File size %s", response['ContentLength'])
+        return response['ContentLength']
 
     def download_small_file(self):
         self.s3_client.download_file(self.bucket_name, self.s3_key, self.local_path)
@@ -52,6 +62,7 @@ class S3ParallelDownload:
     def download_file_in_parts(self, start_idx, file_size):
         start = start_idx
         end = min(start + self.chunk_size, file_size)
+        LOGGER.info("Downloading bytes %s to %s", start, end)
         self.s3_client.download_fileobj(
             self.bucket_name,
             self.s3_key,
@@ -60,12 +71,12 @@ class S3ParallelDownload:
         )
 
     def download_file(self):
-        file_size = self.get_key().size - 1
-        print(f"File size: {file_size}")
+        file_size = self.get_file_size()
+        LOGGER.info("File size %s", file_size)
         if file_size < self.chunk_size:
             self.download_small_file()
         else:
-            print(f"Downloading {self.s3_key} in chunks of {self.chunk_size} bytes")
+            LOGGER.info("Downloading %s in chunks of %s bytes", self.s3_key, self.chunk_size)
              # Create a list of chunk ranges
              # Use gevent to download each chunk in parallel
              # Use a generator to yield the chunks
