@@ -59,20 +59,23 @@ class S3ParallelDownload:
     def download_small_file(self):
         self.s3_client.download_file(self.bucket_name, self.s3_key, self.local_path)
 
-    def download_file_in_parts(self, start_idx, file_size):
+    def download_file_in_chunks(self, start_idx, file_size):
         start = start_idx
         end = min(start + self.chunk_size, file_size)
         LOGGER.info("Downloading bytes %s to %s", start, end)
-        self.s3_client.download_fileobj(
-            self.bucket_name,
-            self.s3_key,
-            self.local_path,
-            ExtraArgs={'Range': f'bytes={start}-{end}'}
-        )
+        response = self.s3_client.get_object(Bucket=self.bucket_name, Key=self.s3_key, Range=f'bytes={start}-{end}')
+        with open(self.local_path, 'r+b') as f:
+            f.seek(start)
+            f.write(response['Body'].read())
 
     def download_file(self):
         file_size = self.get_file_size()
         LOGGER.info("File size %s", file_size)
+
+        # Create a local file with the same size as the S3 object
+        with open(self.local_path, 'wb') as f:
+            f.truncate(file_size)
+
         if file_size < self.chunk_size:
             self.download_small_file()
         else:
@@ -82,6 +85,6 @@ class S3ParallelDownload:
              # Use a generator to yield the chunks
             chunk_list = range(0, file_size, self.chunk_size)
             gevent.joinall([
-                gevent.spawn(self.download_file_in_parts, chunk, file_size)
+                gevent.spawn(self.download_file_in_chunks, chunk, file_size)
                 for chunk in chunk_list
             ])
