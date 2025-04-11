@@ -23,33 +23,25 @@
 #
 
 import gevent
+from gevent import monkey; monkey.patch_all()
+from gevent.pool import Pool
 import logging
 import os
 
 LOGGER = logging.getLogger(__file__)
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
-_DEFAULT_CHUNK_SIZE_B = 20 * 1024 * 1024
+DEFAULT_CHUNK_SIZE_BYTES = 10 * 1024 * 1024
+NO_OF_GREENLETS = 10
 
 class S3ParallelDownload:
     def __init__(self, bucket_name, s3_key, local_path, s3_client=None, s3_resource=None):
         self.bucket_name = bucket_name
         self.s3_key = s3_key
         self.s3_client = s3_client
-        self.chunk_size = _DEFAULT_CHUNK_SIZE_B
+        self.chunk_size = DEFAULT_CHUNK_SIZE_BYTES
         self.local_path = local_path
         self.s3_resource = s3_resource
-
-    def get_bucket_obj(self):
-        return self.s3_client.head_object(Bucket=self.bucket_name, Key=self.s3_key)
-
-    def get_key(self):
-        bucket = self.get_bucket_obj()
-        LOGGER.info(f"Getting key %s from bucket %s", self.s3_key, self.bucket_name)
-        key_object = bucket.get_key(self.s3_key)
-        if key_object is None:
-            raise ValueError(f"Key {self.s3_key} not found in bucket {self.bucket_name}")
-        return key_object
 
     def get_file_size(self):
         response = self.s3_client.head_object(Bucket=self.bucket_name, Key=self.s3_key)
@@ -62,7 +54,7 @@ class S3ParallelDownload:
     def download_file_in_chunks(self, start_idx, file_size):
         start = start_idx
         end = min(start + self.chunk_size, file_size)
-        LOGGER.info("Downloading bytes %s to %s", start, end)
+        # LOGGER.info("Downloading bytes %s to %s", start, end)
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=self.s3_key, Range=f'bytes={start}-{end}')
         with open(self.local_path, 'r+b') as f:
             f.seek(start)
@@ -84,7 +76,8 @@ class S3ParallelDownload:
              # Use gevent to download each chunk in parallel
              # Use a generator to yield the chunks
             chunk_list = range(0, file_size, self.chunk_size)
+            pool = Pool(NO_OF_GREENLETS)
             gevent.joinall([
-                gevent.spawn(self.download_file_in_chunks, chunk, file_size)
+                pool.spawn(self.download_file_in_chunks, chunk, file_size)
                 for chunk in chunk_list
             ])
