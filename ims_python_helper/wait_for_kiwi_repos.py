@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2023 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2023-2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -63,13 +63,17 @@ def wait_for_kiwi_repos(ims_job_id: str, ims_url: str, ca_cert:str,
     _set_ims_job_status(ims_job_id, ims_url, session, myLogger)
 
     # check repo availability
-    return _wait_for_kiwi_ng_repos(recipe_root, session, myLogger, timeout)
+    ret_val = _wait_for_kiwi_ng_repos(recipe_root, session, myLogger, timeout)
+
+    if ret_val != 0:
+        _set_ims_job_status(ims_job_id, ims_url, session, myLogger, job_status="error")
+    return ret_val
 
 
-def _set_ims_job_status(ims_job_id: str, ims_url: str, session, logger: logging.Logger) -> None:
+def _set_ims_job_status(ims_job_id: str, ims_url: str, session, logger: logging.Logger, job_status=IMS_JOB_STATUS) -> None:
     try:
         if ims_job_id:
-            logger.info("Setting job status to '%s'", IMS_JOB_STATUS)
+            logger.info("Setting job status to '%s'", job_status)
             result = ImsHelper(
                 ims_url=ims_url,
                 session=session,
@@ -77,7 +81,7 @@ def _set_ims_job_status(ims_job_id: str, ims_url: str, session, logger: logging.
                 s3_secret_key=os.environ.get('S3_SECRET_KEY', None),
                 s3_access_key=os.environ.get('S3_ACCESS_KEY', None),
                 s3_bucket=os.environ.get('S3_BUCKET', None)
-            )._ims_job_patch_job_status(ims_job_id, IMS_JOB_STATUS)
+            )._ims_job_patch_job_status(ims_job_id, job_status)
             logger.info("Result of setting job status: %s", result)
     except requests.exceptions.HTTPError as exc:
         logger.warning("Error setting job status %s" % exc)
