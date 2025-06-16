@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Dependencies
+- CASMCMS-8022:  update python modules
+
 ### Fixed
 - CASMCMS-9455: Building image from recipe Job stuck at waiting_for_repos status
 - CASMCMS-9364: Confirm exposed SSH private key impact in ims-python-helper
