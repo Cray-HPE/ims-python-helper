@@ -1,7 +1,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2018-2023 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2018-2025 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -312,7 +312,10 @@ def main(program_name, args):
 
     parser = create_parser(program_name)
     args = parser.parse_args(args)
-    logging.basicConfig(level=args.log_level)
+    log_level = args.log_level if 'log_level' in args and args.log_level != parser.get_default('log_level') \
+        else os.environ.get('LOG_LEVEL', 'INFO')
+
+    logging.basicConfig(level=log_level)
 
     ims_helper_kwargs = {
         'ims_url': args.ims_url,
