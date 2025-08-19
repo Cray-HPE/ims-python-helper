@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- CASMCMS-9510: Change logging level for `ims-python-helper` based on environment variable.
+
 ## [3.2.0] - 2024-09-19
 
 ### Dependencies
