@@ -9,4 +9,5 @@ requests==2.32.4
 requests-oauthlib==2.0.0
 s3transfer==0.11.3 # botocore 1.36.2 requires 0.11.3
 six==1.17.0 # botocore 1.36.2 requires 1.17.0
+testtools>=2.7,<2.8
 urllib3==2.4.0
